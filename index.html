@@ -61,16 +61,26 @@
         .animate-fade-in {
             animation: fadeIn 0.3s ease-out forwards;
         }
+        /* Drag and Drop styles */
+        .draggable-item {
+            cursor: grab;
+        }
+        .draggable-item:active {
+            cursor: grabbing;
+        }
+        .dragging {
+            opacity: 0.5;
+            border: 2px dashed #6366f1;
+        }
     </style>
 </head>
 <body class="text-slate-800 h-screen overflow-hidden selection:bg-indigo-100 selection:text-indigo-700">
     <div id="root" class="h-full flex flex-col"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+        const { useState, useEffect, useMemo, useRef, useCallback } = React;
         
         // --- EMBEDDED ICONS (Guaranteed to work) ---
-        // Minimalist, fashionable strokes
         const Icons = {
             School: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m4 6 8-4 8 4"/><path d="m18 10 4 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8l4-2"/><path d="M14 22v-4a2 2 0 0 0-4 0v4"/><path d="M18 5v17"/><path d="M6 5v17"/><circle cx="12" cy="9" r="2"/></svg>,
             Calendar: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
@@ -96,6 +106,9 @@
             ImageDown: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><circle cx="9" cy="9" r="2"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/></svg>,
             Save: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
             Upload: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
+            Filter: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
+            GripVertical: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>,
+            FileSpreadsheet: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></svg>,
         };
         
         const Icon = ({ name, size = 20, className = "", strokeWidth, fill }) => {
@@ -119,8 +132,6 @@
             Second: '2 смена'
         };
 
-        // Shift 1: Lessons 1-7
-        // Shift 2: Lessons 0-6
         const SHIFT_PERIODS = {
             [Shift.First]: [1, 2, 3, 4, 5, 6, 7],
             [Shift.Second]: [0, 1, 2, 3, 4, 5, 6]
@@ -135,8 +146,7 @@
             DayOfWeek.Saturday
         ];
 
-        // --- Storage Service ---
-        const STORAGE_KEY = 'gymnasium_data_v3';
+        const STORAGE_KEY = 'gymnasium_data_v4';
         
         const INITIAL_DATA = {
             subjects: [
@@ -224,6 +234,38 @@
             const [tempSubject, setTempSubject] = useState({ color: '#e0e7ff' });
             const [tempClass, setTempClass] = useState({ shift: Shift.First });
 
+            const [draggedItemIndex, setDraggedItemIndex] = useState(null);
+
+            // Drag and Drop Handlers
+            const handleDragStart = (index) => {
+                setDraggedItemIndex(index);
+            };
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+            };
+
+            const handleDrop = (dropIndex, type) => {
+                if (draggedItemIndex === null) return;
+                
+                const newData = { ...data };
+                let list;
+                if (type === 'teachers') list = newData.teachers;
+                else if (type === 'subjects') list = newData.subjects;
+                else list = newData.classes;
+
+                const item = list.splice(draggedItemIndex, 1)[0];
+                list.splice(dropIndex, 0, item);
+
+                if (type === 'teachers') newData.teachers = list;
+                else if (type === 'subjects') newData.subjects = list;
+                else newData.classes = list;
+
+                setData(newData);
+                saveData(newData);
+                setDraggedItemIndex(null);
+            };
+
             const handleSave = () => {
                 const newData = { ...data };
                 if (activeSubTab === 'teachers') {
@@ -264,11 +306,21 @@
                 if (activeSubTab === 'teachers') {
                     return (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
-                            {data.teachers.map(t => (
-                                <div key={t.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex flex-col group">
+                            {data.teachers.map((t, index) => (
+                                <div 
+                                    key={t.id} 
+                                    draggable
+                                    onDragStart={() => handleDragStart(index)}
+                                    onDragOver={handleDragOver}
+                                    onDrop={() => handleDrop(index, 'teachers')}
+                                    className={`bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex flex-col group draggable-item ${draggedItemIndex === index ? 'dragging' : ''}`}
+                                >
                                     <div className="flex justify-between items-start mb-3">
-                                        <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                                            <Icon name="User" size={20} />
+                                        <div className="flex items-center gap-2">
+                                            <div className="cursor-grab text-slate-300 hover:text-slate-500"><Icon name="GripVertical" size={20} /></div>
+                                            <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                                <Icon name="User" size={20} />
+                                            </div>
                                         </div>
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button onClick={() => { setTempTeacher(t); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full"><Icon name="Edit2" size={16}/></button>
@@ -290,9 +342,17 @@
                 if (activeSubTab === 'subjects') {
                     return (
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-20">
-                            {data.subjects.map(s => (
-                                <div key={s.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-slate-200">
+                            {data.subjects.map((s, index) => (
+                                <div 
+                                    key={s.id} 
+                                    draggable
+                                    onDragStart={() => handleDragStart(index)}
+                                    onDragOver={handleDragOver}
+                                    onDrop={() => handleDrop(index, 'subjects')}
+                                    className={`bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-slate-200 draggable-item ${draggedItemIndex === index ? 'dragging' : ''}`}
+                                >
                                     <div className="flex items-center gap-3">
+                                        <div className="cursor-grab text-slate-300 hover:text-slate-500"><Icon name="GripVertical" size={16} /></div>
                                         <div className="w-8 h-8 rounded-full shadow-inner" style={{ backgroundColor: s.color }}></div>
                                         <span className="font-semibold text-slate-700">{s.name}</span>
                                     </div>
@@ -308,8 +368,16 @@
                 if (activeSubTab === 'classes') {
                     return (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 pb-20">
-                            {data.classes.map(c => (
-                                <div key={c.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center relative group hover:shadow-md transition-all">
+                            {data.classes.map((c, index) => (
+                                <div 
+                                    key={c.id} 
+                                    draggable
+                                    onDragStart={() => handleDragStart(index)}
+                                    onDragOver={handleDragOver}
+                                    onDrop={() => handleDrop(index, 'classes')}
+                                    className={`bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center relative group hover:shadow-md transition-all draggable-item ${draggedItemIndex === index ? 'dragging' : ''}`}
+                                >
+                                    <div className="absolute left-2 top-2 cursor-grab text-slate-300 hover:text-slate-500"><Icon name="GripVertical" size={14} /></div>
                                     <div className="text-2xl font-bold text-slate-800 mb-1">{c.name}</div>
                                     <div className={`text-xs font-bold px-2 py-0.5 rounded-full inline-block ${c.shift === Shift.First ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
                                         {c.shift === Shift.First ? 'I' : 'II'} смена
@@ -408,9 +476,40 @@
             const [isEditorOpen, setIsEditorOpen] = useState(false);
             const [editingCell, setEditingCell] = useState(null);
             const [tempItem, setTempItem] = useState({});
+            
+            // Filter States
+            const [filterType, setFilterType] = useState('class'); // class, teacher, subject
+            const [filterValue, setFilterValue] = useState('');
 
             const currentPeriods = SHIFT_PERIODS[selectedShift];
-            const visibleClasses = data.classes.filter(c => (c.shift || Shift.First) === selectedShift);
+            
+            // Filter logic
+            const getVisibleRows = () => {
+                if (filterType === 'class') {
+                    // Add class filter logic
+                    if (filterValue) {
+                         return data.classes.filter(c => c.id === filterValue && (c.shift || Shift.First) === selectedShift);
+                    }
+                    return data.classes.filter(c => (c.shift || Shift.First) === selectedShift);
+                }
+                if (filterType === 'teacher') {
+                     if (!filterValue) return [];
+                    const matchingClassIds = data.schedule
+                        .filter(s => s.day === selectedDay && s.shift === selectedShift && s.teacherId === filterValue)
+                        .map(s => s.classId);
+                    return data.classes.filter(c => (c.shift || Shift.First) === selectedShift && matchingClassIds.includes(c.id));
+                }
+                if (filterType === 'subject') {
+                    if (!filterValue) return [];
+                    const matchingClassIds = data.schedule
+                        .filter(s => s.day === selectedDay && s.shift === selectedShift && s.subjectId === filterValue)
+                        .map(s => s.classId);
+                    return data.classes.filter(c => (c.shift || Shift.First) === selectedShift && matchingClassIds.includes(c.id));
+                }
+                return data.classes.filter(c => (c.shift || Shift.First) === selectedShift);
+            };
+
+            const visibleClasses = getVisibleRows();
 
             const getScheduleItem = (classId, period) => {
                 return data.schedule.find(s => s.classId === classId && s.period === period && s.day === selectedDay && s.shift === selectedShift);
@@ -442,20 +541,165 @@
                 setIsEditorOpen(false);
             };
 
+            const handleExportStyledExcel = () => {
+                // This approach generates an HTML table with inline styles which Excel opens as a formatted spreadsheet.
+                // This is a common technique to avoid complex libraries for "beautiful" exports.
+                
+                let html = `
+                    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+                    <head>
+                        <!--[if gte mso 9]>
+                        <xml>
+                            <x:ExcelWorkbook>
+                                <x:ExcelWorksheets>
+                                    <x:ExcelWorksheet>
+                                        <x:Name>Расписание</x:Name>
+                                        <x:WorksheetOptions>
+                                            <x:DisplayGridlines/>
+                                        </x:WorksheetOptions>
+                                    </x:ExcelWorksheet>
+                                </x:ExcelWorksheets>
+                            </x:ExcelWorkbook>
+                        </xml>
+                        <![endif]-->
+                        <meta charset="utf-8">
+                        <style>
+                            table { border-collapse: collapse; width: 100%; }
+                            th { background-color: #f1f5f9; border: 1px solid #cbd5e1; padding: 10px; font-weight: bold; text-align: center; }
+                            td { border: 1px solid #cbd5e1; padding: 5px; vertical-align: top; }
+                            .header-cell { background-color: #e2e8f0; font-size: 14px; }
+                            .subject { font-weight: bold; font-size: 12px; }
+                            .teacher { font-size: 10px; color: #475569; }
+                            .room { font-size: 10px; color: #94a3b8; text-align: right; }
+                            .shift-header { background-color: #4f46e5; color: white; font-size: 16px; font-weight: bold; padding: 10px; text-align: left; }
+                            .day-header { background-color: #e0e7ff; font-weight: bold; padding: 5px; text-align: center; font-size: 14px; }
+                        </style>
+                    </head>
+                    <body>
+                        <table>
+                `;
+
+                // Group by Day -> Shift -> Class
+                DAYS.forEach(day => {
+                    html += `<tr><td colspan="8" class="day-header">${day}</td></tr>`;
+                    
+                    [Shift.First, Shift.Second].forEach(shift => {
+                        const classes = data.classes.filter(c => c.shift === shift);
+                        if (classes.length === 0) return;
+
+                        const periods = SHIFT_PERIODS[shift];
+                        html += `<tr><td colspan="8" class="shift-header">${shift}</td></tr>`;
+                        
+                        // Header Row
+                        html += `<tr><th class="header-cell">Класс</th>`;
+                        periods.forEach(p => html += `<th class="header-cell">${p} урок</th>`);
+                        html += `</tr>`;
+
+                        // Rows
+                        classes.forEach(cls => {
+                            html += `<tr><td style="font-weight:bold; text-align:center; font-size: 14px;">${cls.name}</td>`;
+                            periods.forEach(p => {
+                                const item = data.schedule.find(s => s.classId === cls.id && s.day === day && s.shift === shift && s.period === p);
+                                if (item) {
+                                    const subj = data.subjects.find(s => s.id === item.subjectId);
+                                    const teach = data.teachers.find(t => t.id === item.teacherId);
+                                    // Use inline background color from subject
+                                    html += `<td style="background-color: ${subj?.color || '#ffffff'}">
+                                                <div class="subject">${subj?.name || ''}</div>
+                                                <div class="teacher">${teach?.name || ''}</div>
+                                                ${item.roomId ? `<div class="room">Каб. ${item.roomId}</div>` : ''}
+                                             </td>`;
+                                } else {
+                                    html += `<td></td>`;
+                                }
+                            });
+                            html += `</tr>`;
+                        });
+                    });
+                    html += `<tr><td colspan="8" style="height: 20px;"></td></tr>`; // Spacer
+                });
+
+                html += `</table></body></html>`;
+
+                const blob = new Blob([html], { type: "application/vnd.ms-excel" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "Полное_Расписание_Гимназия.xls";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            // Teacher grouping for modal
+            const recommendedTeachers = tempItem.subjectId ? data.teachers.filter(t => t.subjectIds.includes(tempItem.subjectId)) : [];
+            const otherTeachers = tempItem.subjectId ? data.teachers.filter(t => !t.subjectIds.includes(tempItem.subjectId)) : data.teachers;
+
+
             return (
                 <div className="flex flex-col h-full bg-slate-50/50 p-6">
                     <div className="flex flex-wrap gap-4 items-center justify-between bg-white p-2 rounded-2xl shadow-sm border border-slate-100 mb-6 max-w-7xl mx-auto w-full">
-                        <div className="flex gap-4 items-center">
+                        <div className="flex gap-4 items-center flex-wrap">
                             <div className="bg-slate-100 p-1 rounded-xl flex">
                                 <button onClick={() => setSelectedShift(Shift.First)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${selectedShift === Shift.First ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>1 смена</button>
                                 <button onClick={() => setSelectedShift(Shift.Second)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${selectedShift === Shift.Second ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>2 смена</button>
                             </div>
-                            <div className="h-8 w-px bg-slate-200 mx-2"></div>
+                            <div className="h-8 w-px bg-slate-200 mx-2 hidden sm:block"></div>
                             <div className="flex overflow-x-auto pb-1 gap-1 custom-scrollbar">
                                 {DAYS.map(day => (
                                     <button key={day} onClick={() => setSelectedDay(day)} className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedDay === day ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-slate-500 hover:bg-slate-100'}`}>{day}</button>
                                 ))}
                             </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <button onClick={handleExportStyledExcel} className="px-3 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-lg text-sm font-bold flex items-center gap-2 transition-colors" title="Скачать красивый Excel">
+                                <Icon name="FileSpreadsheet" size={18} /> <span className="hidden lg:inline">Excel</span>
+                            </button>
+                            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1">
+                                <span className="pl-2 text-slate-400"><Icon name="Filter" size={16} /></span>
+                                <select 
+                                    className="bg-transparent border-none text-sm font-semibold text-slate-700 outline-none w-24"
+                                    value={filterType}
+                                    onChange={(e) => { setFilterType(e.target.value); setFilterValue(''); }}
+                                >
+                                    <option value="class">Класс</option>
+                                    <option value="teacher">Учитель</option>
+                                    <option value="subject">Предмет</option>
+                                </select>
+                            </div>
+                            
+                             {filterType === 'class' && (
+                                <select 
+                                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-indigo-500 w-40"
+                                    value={filterValue}
+                                    onChange={(e) => setFilterValue(e.target.value)}
+                                >
+                                    <option value="">Все</option>
+                                    {data.classes.filter(c => c.shift === selectedShift).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                            )}
+
+                            {filterType === 'teacher' && (
+                                <select 
+                                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-indigo-500 w-40"
+                                    value={filterValue}
+                                    onChange={(e) => setFilterValue(e.target.value)}
+                                >
+                                    <option value="">Все</option>
+                                    {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </select>
+                            )}
+                            {filterType === 'subject' && (
+                                <select 
+                                    className="border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white outline-none focus:border-indigo-500 w-40"
+                                    value={filterValue}
+                                    onChange={(e) => setFilterValue(e.target.value)}
+                                >
+                                    <option value="">Все</option>
+                                    {data.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            )}
                         </div>
                     </div>
 
@@ -469,15 +713,20 @@
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
-                                    {visibleClasses.map(cls => (
+                                    {visibleClasses.length > 0 ? visibleClasses.map(cls => (
                                         <tr key={cls.id} className="group">
                                             <td className="p-4 border-r border-slate-100 font-black text-xl text-slate-700 sticky left-0 bg-white z-10 text-center group-hover:bg-slate-50 transition-colors">{cls.name}</td>
                                             {currentPeriods.map(p => {
                                                 const item = getScheduleItem(cls.id, p);
                                                 const subject = data.subjects.find(s => s.id === item?.subjectId);
                                                 const teacher = data.teachers.find(t => t.id === item?.teacherId);
+                                                
+                                                // Highlight logic if filtering
+                                                const isDimmed = (filterType === 'teacher' && filterValue && item?.teacherId !== filterValue) || 
+                                                                 (filterType === 'subject' && filterValue && item?.subjectId !== filterValue);
+
                                                 return (
-                                                    <td key={p} onClick={() => handleCellClick(cls.id, p)} className="p-2 border-r border-slate-50 h-24 align-top cursor-pointer transition-all relative hover:bg-slate-50">
+                                                    <td key={p} onClick={() => handleCellClick(cls.id, p)} className={`p-2 border-r border-slate-50 h-24 align-top cursor-pointer transition-all relative hover:bg-slate-50 ${isDimmed ? 'opacity-20' : ''}`}>
                                                         {item ? (
                                                             <div className="h-full w-full rounded-xl p-3 text-xs shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between border border-slate-100" style={{ backgroundColor: subject?.color ? subject.color + '40' : '#f1f5f9' }}>
                                                                 <div className="font-bold text-slate-800 line-clamp-1 text-sm">{subject?.name}</div>
@@ -491,7 +740,13 @@
                                                 );
                                             })}
                                         </tr>
-                                    ))}
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={currentPeriods.length + 1} className="text-center p-10 text-slate-400 italic">
+                                                Нет данных для отображения по выбранным фильтрам
+                                            </td>
+                                        </tr>
+                                    )}
                                 </tbody>
                             </table>
                         </div>
@@ -510,7 +765,14 @@
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Учитель</label>
                                 <select className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-white outline-none focus:border-indigo-500" value={tempItem.teacherId || ''} onChange={e => setTempItem({...tempItem, teacherId: e.target.value})} disabled={!tempItem.subjectId}>
                                     <option value="">Выберите...</option>
-                                    {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                    {recommendedTeachers.length > 0 && (
+                                        <optgroup label="Рекомендуемые (ведут предмет)">
+                                            {recommendedTeachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                        </optgroup>
+                                    )}
+                                    <optgroup label="Остальные">
+                                        {otherTeachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                    </optgroup>
                                 </select>
                             </div>
                              <div>
@@ -533,50 +795,63 @@
             const [currentSubParams, setCurrentSubParams] = useState(null);
 
             const selectedDayOfWeek = useMemo(() => {
-                const dayIndex = new Date(selectedDate).getDay();
-                if (dayIndex === 0) return null;
-                return DAYS[dayIndex - 1];
+                const idx = new Date(selectedDate).getDay();
+                if (idx === 0) return null;
+                return DAYS[idx - 1];
             }, [selectedDate]);
 
             const absentTeachers = data.teachers.filter(t => t.unavailableDates.includes(selectedDate));
-            const absentIds = absentTeachers.map(t => t.id);
-            const affectedLessons = data.schedule.filter(s => s.day === selectedDayOfWeek && absentIds.includes(s.teacherId)).sort((a, b) => a.period - b.period);
+            
+            const affectedLessons = useMemo(() => {
+                if (!selectedDayOfWeek) return [];
+                const absentIds = absentTeachers.map(t => t.id);
+                // Filter schedule items for this day where teacher is absent
+                return data.schedule
+                    .filter(s => s.day === selectedDayOfWeek && absentIds.includes(s.teacherId))
+                    .sort((a, b) => a.period - b.period);
+            }, [data.schedule, selectedDayOfWeek, absentTeachers]);
 
-            const handleToggleUnavailable = (teacherId) => {
+            const handleToggleUnavailable = (id) => {
                 const newData = { ...data };
-                const teacher = newData.teachers.find(t => t.id === teacherId);
-                if (teacher.unavailableDates.includes(selectedDate)) {
-                    teacher.unavailableDates = teacher.unavailableDates.filter(d => d !== selectedDate);
+                const t = newData.teachers.find(x => x.id === id);
+                if (t.unavailableDates.includes(selectedDate)) {
+                    t.unavailableDates = t.unavailableDates.filter(d => d !== selectedDate);
                 } else {
-                    teacher.unavailableDates.push(selectedDate);
+                    t.unavailableDates.push(selectedDate);
                 }
                 setData(newData);
                 saveData(newData);
             };
 
-            const handleAssignReplacement = (teacherId) => {
+            const handleAssign = (teacherId) => {
                 const newData = { ...data };
-                const existingSubIndex = newData.substitutions.findIndex(s => s.scheduleItemId === currentSubParams.scheduleItemId && s.date === selectedDate);
-                const newSub = {
-                    id: existingSubIndex >= 0 ? newData.substitutions[existingSubIndex].id : generateId(),
+                // Check if substitution exists
+                const existingIdx = newData.substitutions.findIndex(s => s.scheduleItemId === currentSubParams.scheduleItemId && s.date === selectedDate);
+                
+                const originalScheduleItem = newData.schedule.find(s => s.id === currentSubParams.scheduleItemId);
+                
+                const sub = {
+                    id: existingIdx >= 0 ? newData.substitutions[existingIdx].id : generateId(),
                     date: selectedDate,
                     scheduleItemId: currentSubParams.scheduleItemId,
-                    originalTeacherId: currentSubParams.originalTeacherId,
+                    originalTeacherId: originalScheduleItem.teacherId,
                     replacementTeacherId: teacherId
                 };
-                if (existingSubIndex >= 0) newData.substitutions[existingSubIndex] = newSub;
-                else newData.substitutions.push(newSub);
+                
+                if (existingIdx >= 0) newData.substitutions[existingIdx] = sub;
+                else newData.substitutions.push(sub);
+                
                 setData(newData);
                 saveData(newData);
                 setIsModalOpen(false);
             };
 
-            const handleDeleteSubstitution = (substitutionId) => {
-                if (!confirm('Отменить замену?')) return;
-                const newData = { ...data };
-                newData.substitutions = newData.substitutions.filter(s => s.id !== substitutionId);
-                setData(newData);
-                saveData(newData);
+            const handleDeleteSubstitution = (scheduleItemId) => {
+                 if (!window.confirm('Удалить замену?')) return;
+                 const newData = { ...data };
+                 newData.substitutions = newData.substitutions.filter(s => !(s.scheduleItemId === scheduleItemId && s.date === selectedDate));
+                 setData(newData);
+                 saveData(newData);
             };
 
             const getCandidates = () => {
@@ -585,110 +860,144 @@
                     const isAbsent = teacher.unavailableDates.includes(selectedDate);
                     const isBusy = data.schedule.some(s => s.teacherId === teacher.id && s.day === selectedDayOfWeek && s.period === currentSubParams.period && s.shift === currentSubParams.shift);
                     const isSpecialist = teacher.subjectIds.includes(currentSubParams.subjectId);
-                    return { teacher, isAbsent, isBusy, isSpecialist, score: (isAbsent || isBusy ? -100 : 0) + (isSpecialist ? 10 : 0) };
+                    
+                    let score = 0;
+                    if (isAbsent) score -= 100;
+                    if (isBusy) score -= 50;
+                    if (isSpecialist) score += 10;
+
+                    return { teacher, isAbsent, isBusy, isSpecialist, score };
                 }).sort((a, b) => b.score - a.score);
             };
 
             return (
-                <div className="flex flex-col h-full bg-slate-50/50 p-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl mx-auto w-full h-full">
-                        <div className="bg-white p-6 rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 space-y-8 h-fit sticky top-6">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Дата</label>
-                                <div className="relative">
-                                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full border border-slate-200 rounded-xl p-3 pl-10 bg-white font-medium" />
-                                    <div className="absolute left-3 top-3.5 text-slate-400 pointer-events-none"><Icon name="Calendar" size={18}/></div>
-                                </div>
+                <div className="flex flex-col h-full p-6 bg-slate-50/50">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full max-w-7xl mx-auto w-full">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 h-fit">
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Дата замены</label>
+                            <div className="relative">
+                                <Icon name="Calendar" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18}/>
+                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full border border-slate-200 pl-10 p-3 rounded-xl text-sm font-bold text-slate-700 outline-none focus:border-indigo-500" />
                             </div>
-                            <div>
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="font-bold text-slate-800 flex items-center gap-2"><Icon name="UserX" size={20} className="text-rose-500"/> Отсутствующие</h3>
-                                    <span className="bg-rose-100 text-rose-600 text-xs font-bold px-2 py-1 rounded-full">{absentTeachers.length}</span>
-                                </div>
-                                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                            
+                            <div className="mt-8 space-y-4">
+                                <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-2">
+                                    <div className="bg-red-100 text-red-600 p-1.5 rounded-lg"><Icon name="UserX" size={18} /></div>
+                                    Отсутствующие
+                                </h3>
+                                <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-1">
                                     {data.teachers.map(t => {
                                         const isAbsent = t.unavailableDates.includes(selectedDate);
                                         return (
-                                            <button key={t.id} onClick={() => handleToggleUnavailable(t.id)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${isAbsent ? 'bg-rose-50 border-rose-200 shadow-inner' : 'bg-white border-slate-100 hover:border-indigo-300'}`}>
-                                                <span className={`text-sm font-medium ${isAbsent ? 'text-rose-700' : 'text-slate-600'}`}>{t.name}</span>
-                                                <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${isAbsent ? 'bg-rose-500 border-rose-500 text-white' : 'border-slate-300'}`}>{isAbsent && <Icon name="Check" size={12}/>}</div>
-                                            </button>
-                                        )
+                                            <div key={t.id} className={`flex items-center justify-between p-3 border rounded-xl transition-all ${isAbsent ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100'}`}>
+                                                <span className={`text-sm font-medium ${isAbsent ? 'text-red-700' : 'text-slate-700'}`}>{t.name}</span>
+                                                <button onClick={() => handleToggleUnavailable(t.id)} className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-colors ${isAbsent ? 'bg-white text-red-600 shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                                    {isAbsent ? 'Вернуть' : 'Отметить'}
+                                                </button>
+                                            </div>
+                                        );
                                     })}
                                 </div>
                             </div>
                         </div>
-                        <div className="lg:col-span-2 bg-white rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 flex flex-col overflow-hidden h-full max-h-[calc(100vh-100px)]">
-                            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white z-10">
-                                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Icon name="List" size={20} className="text-indigo-500"/> Уроки требующие замены</h2>
-                            </div>
-                            <div className="overflow-y-auto p-6 flex-1 bg-slate-50 space-y-4 custom-scrollbar">
-                                {affectedLessons.map(lesson => {
-                                    const sub = data.substitutions.find(s => s.scheduleItemId === lesson.id && s.date === selectedDate);
-                                    const replacement = sub ? data.teachers.find(t => t.id === sub.replacementTeacherId) : null;
-                                    const subject = data.subjects.find(s => s.id === lesson.subjectId);
-                                    const cls = data.classes.find(c => c.id === lesson.classId);
-                                    const teacher = data.teachers.find(t => t.id === lesson.teacherId);
-                                    return (
-                                        <div key={lesson.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                            <div className="flex items-start gap-4">
-                                                <div className="flex flex-col items-center justify-center w-14 h-14 bg-slate-100 rounded-xl text-slate-500 font-bold">
-                                                    <span className="text-xl leading-none">{lesson.period}</span>
-                                                    <span className="text-[10px] uppercase">урок</span>
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="font-black text-lg text-slate-800">{cls?.name}</span>
-                                                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-blue-50 text-blue-600">{lesson.shift === Shift.First ? '1 смена' : '2 смена'}</span>
-                                                    </div>
-                                                    <div className="font-medium text-slate-600">{subject?.name}</div>
-                                                    <div className="text-xs text-rose-400 flex items-center gap-1 mt-1"><Icon name="UserX" size={12}/> {teacher?.name}</div>
-                                                </div>
-                                            </div>
-                                            <div className="w-full sm:w-auto">
-                                                {replacement ? (
-                                                    <div className="flex items-center justify-between gap-3 bg-emerald-50/50 p-2 rounded-xl border border-emerald-100/50">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center"><Icon name="UserCheck" size={20}/></div>
-                                                            <div>
-                                                                <div className="text-[10px] font-bold text-emerald-600 uppercase">Заменяет</div>
-                                                                <div className="font-bold text-emerald-900 text-sm">{replacement.name}</div>
+
+                        <div className="md:col-span-2 bg-white rounded-2xl shadow-sm border border-slate-100 p-6 overflow-hidden flex flex-col">
+                            <h2 className="font-bold text-lg text-slate-800 mb-6 flex items-center gap-2">
+                                <Icon name="List" size={20} className="text-indigo-600"/>
+                                Уроки требующие замены
+                            </h2>
+                            
+                            <div className="overflow-y-auto flex-1 custom-scrollbar pr-2">
+                                {affectedLessons.length === 0 ? (
+                                    <div className="h-full flex flex-col items-center justify-center text-slate-400 py-10">
+                                        <Icon name="Coffee" size={48} className="mb-4 text-slate-300"/>
+                                        <p>Нет уроков для замены на этот день</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {affectedLessons.map(lesson => {
+                                            const sub = data.substitutions.find(s => s.scheduleItemId === lesson.id && s.date === selectedDate);
+                                            const replacement = sub ? data.teachers.find(t => t.id === sub.replacementTeacherId) : null;
+                                            const cls = data.classes.find(c => c.id === lesson.classId);
+                                            const subj = data.subjects.find(s => s.id === lesson.subjectId);
+                                            
+                                            return (
+                                                <div key={lesson.id} className="border border-slate-100 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/30">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 flex flex-col items-center justify-center shadow-sm text-indigo-600">
+                                                            <span className="text-xs font-bold uppercase text-slate-400">Урок</span>
+                                                            <span className="text-lg font-black">{lesson.period}</span>
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="text-lg font-bold text-slate-800">{cls?.name}</span>
+                                                                <span className="text-xs bg-slate-200 px-2 py-0.5 rounded text-slate-600 font-medium">{cls?.shift || Shift.First}</span>
+                                                            </div>
+                                                            <div className="text-sm text-slate-600 font-medium flex items-center gap-2">
+                                                                <span className="w-2 h-2 rounded-full" style={{backgroundColor: subj?.color}}></span>
+                                                                {subj?.name}
                                                             </div>
                                                         </div>
-                                                        <button onClick={() => handleDeleteSubstitution(sub.id)} className="w-8 h-8 flex items-center justify-center text-rose-400 hover:text-white hover:bg-rose-500 rounded-lg transition-all"><Icon name="Trash2" size={16}/></button>
                                                     </div>
-                                                ) : (
-                                                    <button onClick={() => { setCurrentSubParams({ scheduleItemId: lesson.id, subjectId: lesson.subjectId, period: lesson.period, shift: lesson.shift, originalTeacherId: teacher.id }); setIsModalOpen(true); }} className="w-full sm:w-auto bg-indigo-600 text-white px-5 py-3 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"><Icon name="Search" size={18}/> Найти замену</button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
+                                                    
+                                                    {replacement ? (
+                                                        <div className="flex items-center gap-3 bg-emerald-50 pl-4 pr-2 py-2 rounded-xl border border-emerald-100">
+                                                            <div>
+                                                                <div className="text-[10px] uppercase font-bold text-emerald-600 tracking-wider mb-0.5">Замена назначена</div>
+                                                                <div className="font-bold text-emerald-900 text-sm">{replacement.name}</div>
+                                                            </div>
+                                                            <button onClick={() => handleDeleteSubstitution(lesson.id)} className="p-2 bg-white rounded-lg text-emerald-200 hover:text-red-500 hover:bg-red-50 transition-colors shadow-sm">
+                                                                <Icon name="Trash2" size={16}/>
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button onClick={() => { setCurrentSubParams({ scheduleItemId: lesson.id, subjectId: lesson.subjectId, period: lesson.period, shift: lesson.shift }); setIsModalOpen(true); }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 transition-all flex items-center gap-2">
+                                                            <Icon name="UserCheck" size={18}/>
+                                                            Найти замену
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
-                    <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Выбор учителя" maxWidth="max-w-2xl">
-                        <div className="space-y-3">
-                            {getCandidates().map(({ teacher, isAbsent, isBusy, isSpecialist }) => {
-                                const canTeach = !isAbsent && !isBusy;
-                                return (
-                                    <button key={teacher.id} disabled={!canTeach} onClick={() => handleAssignReplacement(teacher.id)} className={`w-full text-left p-4 rounded-xl border transition-all group flex items-center justify-between ${!canTeach ? 'opacity-60 bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:border-indigo-500 hover:shadow-md'}`}>
-                                        <div className="flex items-center gap-4">
-                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-sm ${isAbsent || isBusy ? 'bg-rose-400' : isSpecialist ? 'bg-emerald-500' : 'bg-amber-400'}`}>
-                                                {isSpecialist && canTeach ? <Icon name="Star" size={18} /> : <Icon name="User" size={18} />}
-                                            </div>
-                                            <div>
-                                                <div className={`font-bold text-base ${canTeach ? 'text-slate-800' : 'text-slate-500'}`}>{teacher.name}</div>
-                                                <div className="text-xs text-slate-500 flex items-center gap-1">
-                                                    {isSpecialist && <span className="text-emerald-600 font-bold">Ведет предмет</span>}
-                                                    {isAbsent ? <span className="text-rose-500">Отсутствует</span> : isBusy ? <span className="text-rose-500">Занят</span> : <span className="text-emerald-600">Свободен</span>}
-                                                </div>
+
+                    <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Выберите замену">
+                        <div className="space-y-2 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
+                            {getCandidates().map(({ teacher, isAbsent, isBusy, isSpecialist }) => (
+                                <button 
+                                    key={teacher.id} 
+                                    disabled={isAbsent || isBusy} 
+                                    onClick={() => handleAssign(teacher.id)} 
+                                    className={`w-full text-left p-4 border rounded-xl flex justify-between items-center transition-all group
+                                        ${isAbsent ? 'bg-red-50 border-red-100 opacity-60 cursor-not-allowed' : 
+                                          isBusy ? 'bg-orange-50 border-orange-100 opacity-60 cursor-not-allowed' : 
+                                          'bg-white border-slate-100 hover:border-indigo-300 hover:shadow-md cursor-pointer'}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm font-bold text-lg
+                                            ${isAbsent ? 'bg-red-100 text-red-600' : 
+                                              isBusy ? 'bg-orange-100 text-orange-600' : 
+                                              isSpecialist ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'}`}>
+                                            {isAbsent ? 'X' : isBusy ? '!' : isSpecialist ? <Icon name="Star" size={18} fill="currentColor" /> : <Icon name="User" size={18} />}
+                                        </div>
+                                        <div>
+                                            <div className="font-bold text-slate-800">{teacher.name}</div>
+                                            <div className="text-xs text-slate-500 flex gap-1">
+                                                {isSpecialist && <span className="text-emerald-600 font-medium">Ведет предмет</span>}
                                             </div>
                                         </div>
-                                        {canTeach && <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="Plus" size={20}/></div>}
-                                    </button>
-                                );
-                            })}
+                                    </div>
+                                    <div className="text-xs font-bold px-3 py-1 rounded-lg">
+                                        {isAbsent ? <span className="text-red-600 bg-white">Отсутствует</span> : 
+                                         isBusy ? <span className="text-orange-600 bg-white">Занят</span> : 
+                                         <span className="text-indigo-600 bg-indigo-50 group-hover:bg-indigo-600 group-hover:text-white transition-colors">Выбрать</span>}
+                                    </div>
+                                </button>
+                            ))}
                         </div>
                     </Modal>
                 </div>
@@ -698,70 +1007,108 @@
         const ExportView = ({ data }) => {
             const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
             const printRef = useRef(null);
-            const subList = data.substitutions.filter(s => s.date === date);
+            const [isGenerating, setIsGenerating] = useState(false);
+
             const handleDownload = async () => {
                 if (!printRef.current) return;
-                const canvas = await html2canvas(printRef.current, { scale: 3, backgroundColor: '#ffffff' });
-                const link = document.createElement('a');
-                link.download = `Замены_${date}.png`;
-                link.href = canvas.toDataURL('image/png');
-                link.click();
+                setIsGenerating(true);
+                try {
+                    await new Promise(resolve => setTimeout(resolve, 100)); // Wait for render
+                    const canvas = await html2canvas(printRef.current, { 
+                        scale: 2, 
+                        backgroundColor: '#ffffff',
+                        logging: false
+                    });
+                    const link = document.createElement('a');
+                    link.download = `Замены_${date}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                } catch (e) {
+                    console.error(e);
+                    alert("Ошибка экспорта");
+                }
+                setIsGenerating(false);
             };
+            
+            const subs = data.substitutions.filter(s => s.date === date);
 
             return (
-                <div className="flex flex-col h-full p-6 bg-slate-50/50">
-                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-wrap gap-4 justify-between items-center max-w-5xl mx-auto w-full mb-8">
+                <div className="p-6 bg-slate-50/50 h-full flex flex-col gap-6 overflow-hidden">
+                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4 max-w-7xl mx-auto w-full">
                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center"><Icon name="ImageDown" size={20}/></div>
-                            <div>
-                                <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">Дата экспорта</div>
-                                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="font-bold text-slate-800 bg-transparent outline-none cursor-pointer" />
-                            </div>
-                        </div>
-                        <button onClick={handleDownload} disabled={subList.length === 0} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg shadow-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"><Icon name="Download" size={20}/> Скачать</button>
-                    </div>
-                    <div className="flex-1 overflow-auto flex justify-center p-4 custom-scrollbar">
-                        <div className="w-full max-w-[800px]">
-                             <div ref={printRef} className="bg-white p-12 shadow-2xl min-h-[800px] text-slate-900 relative overflow-hidden" style={{ fontFamily: '"Times New Roman", serif' }}>
-                                <div className="text-center mb-10">
-                                    <h1 className="text-3xl font-bold uppercase mb-2 tracking-widest">Замена уроков</h1>
-                                    <div className="w-20 h-1 bg-black mx-auto mb-4"></div>
-                                    <h2 className="text-xl italic text-slate-600">{new Date(date).toLocaleDateString('ru-RU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h2>
-                                </div>
-                                {subList.length === 0 ? <div className="text-center p-20 border-2 border-dashed border-slate-300 text-slate-400 italic rounded-lg">Нет изменений</div> : (
-                                    <table className="w-full border-collapse border border-black text-left text-base">
-                                        <thead>
-                                            <tr className="bg-slate-100">
-                                                <th className="border border-black p-3 text-center w-16">Урок</th>
-                                                <th className="border border-black p-3 w-24">Класс</th>
-                                                <th className="border border-black p-3">Предмет</th>
-                                                <th className="border border-black p-3 w-1/4 text-rose-700">Отсутствует</th>
-                                                <th className="border border-black p-3 w-1/4 text-emerald-800 bg-emerald-50">Заменяет</th>
-                                                <th className="border border-black p-3 text-center w-16">Каб.</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {subList.map((sub, i) => {
-                                                const sch = data.schedule.find(s => s.id === sub.scheduleItemId);
-                                                if(!sch) return null;
-                                                const cls = data.classes.find(c=>c.id===sch.classId);
-                                                return (
-                                                    <tr key={i}>
-                                                        <td className="border border-black p-3 text-center font-bold">{sch.period}</td>
-                                                        <td className="border border-black p-3 font-bold">{cls?.name}</td>
-                                                        <td className="border border-black p-3">{data.subjects.find(s=>s.id===sch.subjectId)?.name}</td>
-                                                        <td className="border border-black p-3 italic text-rose-800">{data.teachers.find(t=>t.id===sub.originalTeacherId)?.name}</td>
-                                                        <td className="border border-black p-3 font-bold text-emerald-900 bg-emerald-50/30">{data.teachers.find(t=>t.id===sub.replacementTeacherId)?.name}</td>
-                                                        <td className="border border-black p-3 text-center">{sch.roomId || '-'}</td>
-                                                    </tr>
-                                                )
-                                            })}
-                                        </tbody>
-                                    </table>
-                                )}
+                             <div className="bg-indigo-50 p-3 rounded-xl text-indigo-600"><Icon name="ImageDown" size={24}/></div>
+                             <div>
+                                 <h2 className="font-bold text-lg text-slate-800">Экспорт замен</h2>
+                                 <p className="text-slate-500 text-sm">Выберите дату для генерации изображения</p>
                              </div>
-                        </div>
-                    </div>
+                         </div>
+                         <div className="flex gap-3 w-full sm:w-auto">
+                             <input type="date" value={date} onChange={e => setDate(e.target.value)} className="border border-slate-200 p-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500 flex-1 sm:flex-none" />
+                             <button onClick={handleDownload} disabled={isGenerating} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2 disabled:opacity-50">
+                                 {isGenerating ? 'Создание...' : <><Icon name="Download" size={20}/> Скачать PNG</>}
+                             </button>
+                         </div>
+                     </div>
+
+                     <div className="flex-1 overflow-auto flex justify-center bg-slate-200/50 rounded-2xl border border-slate-200 p-8 shadow-inner">
+                         <div ref={printRef} className="bg-white p-10 shadow-2xl min-h-[800px] w-[900px] text-slate-900 relative">
+                             
+                             <div className="flex justify-between items-end border-b-2 border-black pb-4 mb-6">
+                                 <div>
+                                     <h1 className="text-4xl font-black uppercase tracking-tight mb-1">Замена Учителей</h1>
+                                     <p className="text-lg text-slate-600 font-medium">Гимназия</p>
+                                 </div>
+                                 <div className="text-right">
+                                     <div className="text-sm text-slate-500 uppercase font-bold tracking-wider">Дата</div>
+                                     <div className="text-2xl font-bold">{new Date(date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+                                 </div>
+                             </div>
+
+                             {subs.length === 0 ? (
+                                 <div className="h-64 flex items-center justify-center text-slate-400 italic text-lg border-2 border-dashed border-slate-200 rounded-xl">
+                                     Нет замен на этот день
+                                 </div>
+                             ) : (
+                                 <table className="w-full border-collapse text-sm">
+                                     <thead>
+                                         <tr className="bg-slate-100 border-y-2 border-black">
+                                             <th className="p-3 text-center font-black uppercase w-16">Урок</th>
+                                             <th className="p-3 text-left font-black uppercase w-24">Класс</th>
+                                             <th className="p-3 text-left font-black uppercase">Предмет</th>
+                                             <th className="p-3 text-left font-black uppercase w-1/4">Кто отсутствует</th>
+                                             <th className="p-3 text-left font-black uppercase w-1/4">Кто заменяет</th>
+                                             <th className="p-3 text-center font-black uppercase w-16">Каб.</th>
+                                         </tr>
+                                     </thead>
+                                     <tbody className="divide-y divide-slate-300">
+                                         {subs.map(sub => {
+                                             const s = data.schedule.find(x => x.id === sub.scheduleItemId);
+                                             if (!s) return null;
+                                             const cls = data.classes.find(c => c.id === s.classId);
+                                             const subj = data.subjects.find(x => x.id === s.subjectId);
+                                             const t1 = data.teachers.find(t => t.id === sub.originalTeacherId);
+                                             const t2 = data.teachers.find(t => t.id === sub.replacementTeacherId);
+                                             return (
+                                                 <tr key={sub.id}>
+                                                     <td className="p-4 text-center font-bold text-lg">{s.period}</td>
+                                                     <td className="p-4 font-bold">{cls?.name}</td>
+                                                     <td className="p-4">{subj?.name}</td>
+                                                     <td className="p-4 text-slate-500 italic line-through decoration-red-500/50">{t1?.name}</td>
+                                                     <td className="p-4 font-bold bg-slate-50">{t2?.name}</td>
+                                                     <td className="p-4 text-center font-mono">{s.roomId || '-'}</td>
+                                                 </tr>
+                                             );
+                                         })}
+                                     </tbody>
+                                 </table>
+                             )}
+                             
+                             <div className="mt-10 pt-4 border-t border-slate-200 flex justify-between text-xs text-slate-400">
+                                 <div>Сформировано автоматически</div>
+                                 <div>Подпись: ____________________</div>
+                             </div>
+                         </div>
+                     </div>
                 </div>
             );
         };
@@ -769,63 +1116,75 @@
         const App = () => {
             const [activeTab, setActiveTab] = useState('schedule');
             const [data, setData] = useState(loadData());
+            const fileInputRef = useRef(null);
+
             const tabs = [
-                { id: 'schedule', label: 'Расписание', icon: <Icon name="Calendar" size={20} /> },
-                { id: 'substitutions', label: 'Замены', icon: <Icon name="ArrowLeftRight" size={20} /> },
-                { id: 'directory', label: 'Справочники', icon: <Icon name="Library" size={20} /> },
-                { id: 'export', label: 'Экспорт', icon: <Icon name="Download" size={20} /> },
+                { id: 'schedule', label: 'Расписание', icon: <Icon name="Calendar" size={18} /> },
+                { id: 'substitutions', label: 'Замены', icon: <Icon name="ArrowLeftRight" size={18} /> },
+                { id: 'directory', label: 'Справочники', icon: <Icon name="Library" size={18} /> },
+                { id: 'export', label: 'Экспорт', icon: <Icon name="Download" size={18} /> },
             ];
 
-            // --- Backup & Restore ---
-            const handleBackup = () => {
+            const handleExportData = () => {
                 const dataStr = JSON.stringify(data, null, 2);
-                const blob = new Blob([dataStr], { type: "application/json" });
+                const blob = new Blob([dataStr], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
-                link.download = `gymnasium_backup_${new Date().toISOString().split('T')[0]}.json`;
                 link.href = url;
+                link.download = `gymnasium_data_${new Date().toISOString().split('T')[0]}.json`;
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
             };
 
-            const handleRestore = (event) => {
-                const file = event.target.files[0];
+            const handleImportData = (e) => {
+                const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (e) => {
+                reader.onload = (event) => {
                     try {
-                        const importedData = JSON.parse(e.target.result);
-                        // Simple validation
-                        if (importedData.teachers && importedData.schedule && importedData.classes) {
+                        const importedData = JSON.parse(event.target.result);
+                        // Basic validation
+                        if (importedData.teachers && importedData.schedule) {
                             setData(importedData);
                             saveData(importedData);
-                            alert("База данных успешно загружена!");
+                            alert('База данных успешно загружена!');
                         } else {
-                            alert("Ошибка: Некорректный формат файла.");
+                            alert('Неверный формат файла');
                         }
                     } catch (err) {
-                        alert("Ошибка при чтении файла.");
+                        alert('Ошибка чтения файла');
                     }
                 };
                 reader.readAsText(file);
             };
 
             return (
-                <div className="flex flex-col h-screen bg-slate-50 text-slate-800 font-sans">
-                    <header className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between shadow-sm z-20">
+                <div className="flex flex-col h-screen bg-slate-50 text-slate-900 font-sans">
+                    <header className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between shadow-sm z-50">
                         <div className="flex items-center gap-4">
-                            <div className="bg-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200"><Icon name="School" size={24} strokeWidth={2} /></div>
-                            <div><h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Гимназия</h1><p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Система управления</p></div>
+                            <div className="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-200">
+                                <Icon name="School" size={24} strokeWidth={2} />
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-black tracking-tight text-slate-800">Гимназия</h1>
+                                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Управление расписанием</p>
+                            </div>
                         </div>
                         <div className="flex items-center gap-2">
-                            <button onClick={handleBackup} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors">
-                                <Icon name="Save" size={18} /> <span className="hidden sm:inline">Сохранить базу</span>
+                             <input 
+                                type="file" 
+                                ref={fileInputRef}
+                                onChange={handleImportData} 
+                                accept=".json" 
+                                className="hidden" 
+                            />
+                            <button onClick={() => fileInputRef.current.click()} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Загрузить базу">
+                                <Icon name="Upload" size={20} />
                             </button>
-                            <label className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer">
-                                <Icon name="Upload" size={18} /> <span className="hidden sm:inline">Загрузить базу</span>
-                                <input type="file" accept=".json" className="hidden" onChange={handleRestore} />
-                            </label>
+                            <button onClick={handleExportData} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Сохранить базу">
+                                <Icon name="Save" size={20} />
+                            </button>
                         </div>
                     </header>
                     <Tabs activeTab={activeTab} onChange={setActiveTab} tabs={tabs} />
