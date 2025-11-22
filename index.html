@@ -493,7 +493,6 @@
             // Filter logic
             const getVisibleRows = () => {
                 if (filterType === 'class') {
-                    // Add class filter logic
                     if (filterValue) {
                          return data.classes.filter(c => c.id === filterValue && (c.shift || Shift.First) === selectedShift);
                     }
@@ -518,22 +517,37 @@
 
             const visibleClasses = getVisibleRows();
 
-            const getScheduleItem = (classId, period) => {
-                return data.schedule.find(s => s.classId === classId && s.period === period && s.day === selectedDay && s.shift === selectedShift);
+            // Returns ARRAY of lessons for this cell
+            const getScheduleItems = (classId, period) => {
+                return data.schedule.filter(s => s.classId === classId && s.period === period && s.day === selectedDay && s.shift === selectedShift);
             };
 
-            const handleCellClick = (classId, period) => {
-                const existing = getScheduleItem(classId, period);
+            // Open modal to EDIT existing item
+            const handleEditItem = (item) => {
+                setEditingCell({ classId: item.classId, period: item.period });
+                setTempItem({ ...item });
+                setIsEditorOpen(true);
+            };
+
+            // Open modal to ADD NEW item to cell
+            const handleAddItem = (classId, period) => {
                 setEditingCell({ classId, period });
-                setTempItem(existing ? { ...existing } : { classId, period, day: selectedDay, shift: selectedShift });
+                setTempItem({ classId, period, day: selectedDay, shift: selectedShift });
                 setIsEditorOpen(true);
             };
 
             const handleSaveItem = () => {
                 if (!tempItem.subjectId || !tempItem.teacherId) { alert("Заполните данные"); return; }
                 const newData = { ...data };
-                newData.schedule = newData.schedule.filter(s => !(s.classId === editingCell.classId && s.period === editingCell.period && s.day === selectedDay && s.shift === selectedShift));
-                newData.schedule.push({ ...tempItem, id: tempItem.id || generateId(), day: selectedDay, shift: selectedShift, classId: editingCell.classId, period: editingCell.period });
+                
+                if (tempItem.id) {
+                    // Update existing lesson
+                    newData.schedule = newData.schedule.map(s => s.id === tempItem.id ? tempItem : s);
+                } else {
+                    // Add new lesson
+                    newData.schedule.push({ ...tempItem, id: generateId(), day: selectedDay, shift: selectedShift, classId: editingCell.classId, period: editingCell.period });
+                }
+                
                 setData(newData);
                 saveData(newData);
                 setIsEditorOpen(false);
@@ -549,26 +563,9 @@
             };
 
             const handleExportStyledExcel = () => {
-                // This approach generates an HTML table with inline styles which Excel opens as a formatted spreadsheet.
-                // This is a common technique to avoid complex libraries for "beautiful" exports.
-                
                 let html = `
                     <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
                     <head>
-                        <!--[if gte mso 9]>
-                        <xml>
-                            <x:ExcelWorkbook>
-                                <x:ExcelWorksheets>
-                                    <x:ExcelWorksheet>
-                                        <x:Name>Расписание</x:Name>
-                                        <x:WorksheetOptions>
-                                            <x:DisplayGridlines/>
-                                        </x:WorksheetOptions>
-                                    </x:ExcelWorksheet>
-                                </x:ExcelWorksheets>
-                            </x:ExcelWorkbook>
-                        </xml>
-                        <![endif]-->
                         <meta charset="utf-8">
                         <style>
                             table { border-collapse: collapse; width: 100%; }
@@ -580,54 +577,48 @@
                             .room { font-size: 10px; color: #94a3b8; text-align: right; }
                             .shift-header { background-color: #4f46e5; color: white; font-size: 16px; font-weight: bold; padding: 10px; text-align: left; }
                             .day-header { background-color: #e0e7ff; font-weight: bold; padding: 5px; text-align: center; font-size: 14px; }
+                            .sub-item { border-bottom: 1px solid #e2e8f0; margin-bottom: 4px; padding-bottom: 4px; }
                         </style>
                     </head>
                     <body>
                         <table>
                 `;
 
-                // Group by Day -> Shift -> Class
                 DAYS.forEach(day => {
                     html += `<tr><td colspan="8" class="day-header">${day}</td></tr>`;
-                    
                     [Shift.First, Shift.Second].forEach(shift => {
                         const classes = data.classes.filter(c => c.shift === shift);
                         if (classes.length === 0) return;
 
                         const periods = SHIFT_PERIODS[shift];
                         html += `<tr><td colspan="8" class="shift-header">${shift}</td></tr>`;
-                        
-                        // Header Row
                         html += `<tr><th class="header-cell">Класс</th>`;
                         periods.forEach(p => html += `<th class="header-cell">${p} урок</th>`);
                         html += `</tr>`;
 
-                        // Rows
                         classes.forEach(cls => {
                             html += `<tr><td style="font-weight:bold; text-align:center; font-size: 14px;">${cls.name}</td>`;
                             periods.forEach(p => {
-                                const item = data.schedule.find(s => s.classId === cls.id && s.day === day && s.shift === shift && s.period === p);
-                                if (item) {
+                                const items = data.schedule.filter(s => s.classId === cls.id && s.day === day && s.shift === shift && s.period === p);
+                                html += `<td>`;
+                                items.forEach(item => {
                                     const subj = data.subjects.find(s => s.id === item.subjectId);
                                     const teach = data.teachers.find(t => t.id === item.teacherId);
-                                    // Use inline background color from subject
-                                    html += `<td style="background-color: ${subj?.color || '#ffffff'}">
+                                    html += `<div class="sub-item" style="background-color: ${subj?.color || '#ffffff'}40">
                                                 <div class="subject">${subj?.name || ''} ${item.direction ? `(${item.direction})` : ''}</div>
                                                 <div class="teacher">${teach?.name || ''}</div>
                                                 ${item.roomId ? `<div class="room">Каб. ${item.roomId}</div>` : ''}
-                                             </td>`;
-                                } else {
-                                    html += `<td></td>`;
-                                }
+                                             </div>`;
+                                });
+                                html += `</td>`;
                             });
                             html += `</tr>`;
                         });
                     });
-                    html += `<tr><td colspan="8" style="height: 20px;"></td></tr>`; // Spacer
+                    html += `<tr><td colspan="8" style="height: 20px;"></td></tr>`;
                 });
 
                 html += `</table></body></html>`;
-
                 const blob = new Blob([html], { type: "application/vnd.ms-excel" });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement("a");
@@ -638,10 +629,8 @@
                 document.body.removeChild(link);
             };
 
-            // Teacher grouping for modal
             const recommendedTeachers = tempItem.subjectId ? data.teachers.filter(t => t.subjectIds.includes(tempItem.subjectId)) : [];
             const otherTeachers = tempItem.subjectId ? data.teachers.filter(t => !t.subjectIds.includes(tempItem.subjectId)) : data.teachers;
-
 
             return (
                 <div className="flex flex-col h-full bg-slate-50/50 p-6">
@@ -716,7 +705,7 @@
                                 <thead className="bg-slate-50 sticky top-0 z-20">
                                     <tr>
                                         <th className="p-4 border-b border-r border-slate-100 text-left text-xs font-extrabold text-slate-400 uppercase w-24 sticky left-0 bg-slate-50 z-30">Класс</th>
-                                        {currentPeriods.map(p => <th key={p} className="p-4 border-b border-slate-100 text-center text-xs font-extrabold text-slate-400 uppercase min-w-[140px]">{p} урок</th>)}
+                                        {currentPeriods.map(p => <th key={p} className="p-4 border-b border-slate-100 text-center text-xs font-extrabold text-slate-400 uppercase min-w-[160px]">{p} урок</th>)}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
@@ -724,28 +713,49 @@
                                         <tr key={cls.id} className="group">
                                             <td className="p-4 border-r border-slate-100 font-black text-xl text-slate-700 sticky left-0 bg-white z-10 text-center group-hover:bg-slate-50 transition-colors">{cls.name}</td>
                                             {currentPeriods.map(p => {
-                                                const item = getScheduleItem(cls.id, p);
-                                                const subject = data.subjects.find(s => s.id === item?.subjectId);
-                                                const teacher = data.teachers.find(t => t.id === item?.teacherId);
+                                                const items = getScheduleItems(cls.id, p);
                                                 
-                                                // Highlight logic if filtering
-                                                const isDimmed = (filterType === 'teacher' && filterValue && item?.teacherId !== filterValue) || 
-                                                                 (filterType === 'subject' && filterValue && item?.subjectId !== filterValue);
+                                                // Dimming Logic
+                                                const hasMatch = items.length > 0 && (
+                                                    (filterType === 'teacher' && filterValue ? items.some(i => i.teacherId === filterValue) : true) &&
+                                                    (filterType === 'subject' && filterValue ? items.some(i => i.subjectId === filterValue) : true)
+                                                );
+                                                const isDimmed = (filterType === 'teacher' && filterValue) || (filterType === 'subject' && filterValue) ? !hasMatch : false;
 
                                                 return (
-                                                    <td key={p} onClick={() => handleCellClick(cls.id, p)} className={`p-2 border-r border-slate-50 h-24 align-top cursor-pointer transition-all relative hover:bg-slate-50 ${isDimmed ? 'opacity-20' : ''}`}>
-                                                        {item ? (
-                                                            <div className="h-full w-full rounded-xl p-3 text-xs shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between border border-slate-100" style={{ backgroundColor: subject?.color ? subject.color + '40' : '#f1f5f9' }}>
-                                                                <div className="flex justify-between items-start gap-1">
-                                                                    <div className="font-bold text-slate-800 line-clamp-1 text-sm">{subject?.name}</div>
-                                                                    {item.direction && <div className="text-[10px] leading-tight px-1.5 py-0.5 rounded bg-white/70 font-semibold text-slate-600 whitespace-nowrap">{item.direction}</div>}
-                                                                </div>
-                                                                <div className="text-slate-600 line-clamp-1 flex items-center gap-1"><Icon name="User" size={10}/> {teacher?.name}</div>
-                                                                {item.roomId && <div className="text-[10px] font-mono text-slate-400 text-right bg-white/50 rounded px-1 self-end">#{item.roomId}</div>}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="h-full w-full rounded-xl border-2 border-dashed border-slate-100 flex items-center justify-center text-slate-200 hover:border-indigo-200 hover:text-indigo-300 transition-colors"><Icon name="Plus" size={24} /></div>
-                                                        )}
+                                                    <td key={p} className={`p-2 border-r border-slate-50 h-28 align-top transition-all relative hover:bg-slate-50 ${isDimmed ? 'opacity-20' : ''}`}>
+                                                        <div className="h-full flex flex-col gap-1">
+                                                            {items.map(item => {
+                                                                const subject = data.subjects.find(s => s.id === item.subjectId);
+                                                                const teacher = data.teachers.find(t => t.id === item.teacherId);
+                                                                return (
+                                                                    <div 
+                                                                        key={item.id} 
+                                                                        onClick={(e) => { e.stopPropagation(); handleEditItem(item); }}
+                                                                        className="rounded-lg p-2 text-xs shadow-sm hover:shadow-md cursor-pointer border border-slate-100 flex flex-col gap-0.5 shrink-0" 
+                                                                        style={{ backgroundColor: subject?.color ? subject.color + '40' : '#f1f5f9' }}
+                                                                    >
+                                                                        <div className="flex justify-between items-center gap-1">
+                                                                            <div className="font-bold text-slate-800 line-clamp-1">{subject?.name}</div>
+                                                                            {item.direction && <div className="text-[9px] px-1 rounded bg-white/80 font-bold text-slate-600 whitespace-nowrap">{item.direction}</div>}
+                                                                        </div>
+                                                                        <div className="flex justify-between items-center gap-1">
+                                                                            <div className="text-slate-600 line-clamp-1 text-[10px] flex items-center gap-1"><Icon name="User" size={10}/> {teacher?.name}</div>
+                                                                            {item.roomId && <div className="text-[9px] font-mono text-slate-400 bg-white/50 rounded px-1">#{item.roomId}</div>}
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            
+                                                            {items.length < 4 && ( // Limit to 4 sub-items visually
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); handleAddItem(cls.id, p); }}
+                                                                    className={`w-full rounded-lg border-2 border-dashed flex items-center justify-center text-slate-300 hover:border-indigo-300 hover:text-indigo-400 transition-colors mt-auto ${items.length === 0 ? 'h-full' : 'h-6'}`}
+                                                                >
+                                                                    <Icon name="Plus" size={16} />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                 );
                                             })}
@@ -762,7 +772,7 @@
                         </div>
                     </div>
 
-                    <Modal isOpen={isEditorOpen} onClose={() => setIsEditorOpen(false)} title="Урок">
+                    <Modal isOpen={isEditorOpen} onClose={() => setIsEditorOpen(false)} title={tempItem.id ? "Редактировать урок" : "Добавить урок"}>
                         <div className="space-y-5">
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Предмет</label>
@@ -1281,7 +1291,7 @@
                                 <Icon name="School" size={24} strokeWidth={2} />
                             </div>
                             <div>
-                                <h1 className="text-xl font-black tracking-tight text-slate-800">Гимназия №22</h1>
+                                <h1 className="text-xl font-black tracking-tight text-slate-800">Гимназия</h1>
                                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Управление расписанием</p>
                             </div>
                         </div>
