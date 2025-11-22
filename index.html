@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -93,6 +94,8 @@
             Info: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>,
             Star: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
             ImageDown: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><circle cx="9" cy="9" r="2"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/></svg>,
+            Save: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
+            Upload: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
         };
         
         const Icon = ({ name, size = 20, className = "", strokeWidth, fill }) => {
@@ -772,11 +775,58 @@
                 { id: 'directory', label: 'Справочники', icon: <Icon name="Library" size={20} /> },
                 { id: 'export', label: 'Экспорт', icon: <Icon name="Download" size={20} /> },
             ];
+
+            // --- Backup & Restore ---
+            const handleBackup = () => {
+                const dataStr = JSON.stringify(data, null, 2);
+                const blob = new Blob([dataStr], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.download = `gymnasium_backup_${new Date().toISOString().split('T')[0]}.json`;
+                link.href = url;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const handleRestore = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const importedData = JSON.parse(e.target.result);
+                        // Simple validation
+                        if (importedData.teachers && importedData.schedule && importedData.classes) {
+                            setData(importedData);
+                            saveData(importedData);
+                            alert("База данных успешно загружена!");
+                        } else {
+                            alert("Ошибка: Некорректный формат файла.");
+                        }
+                    } catch (err) {
+                        alert("Ошибка при чтении файла.");
+                    }
+                };
+                reader.readAsText(file);
+            };
+
             return (
                 <div className="flex flex-col h-screen bg-slate-50 text-slate-800 font-sans">
-                    <header className="bg-white border-b border-slate-100 px-6 py-4 flex items-center gap-4 shadow-sm z-20">
-                        <div className="bg-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200"><Icon name="School" size={24} strokeWidth={2} /></div>
-                        <div><h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Гимназия</h1><p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Система управления</p></div>
+                    <header className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between shadow-sm z-20">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200"><Icon name="School" size={24} strokeWidth={2} /></div>
+                            <div><h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Гимназия</h1><p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Система управления</p></div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={handleBackup} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors">
+                                <Icon name="Save" size={18} /> <span className="hidden sm:inline">Сохранить базу</span>
+                            </button>
+                            <label className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer">
+                                <Icon name="Upload" size={18} /> <span className="hidden sm:inline">Загрузить базу</span>
+                                <input type="file" accept=".json" className="hidden" onChange={handleRestore} />
+                            </label>
+                        </div>
                     </header>
                     <Tabs activeTab={activeTab} onChange={setActiveTab} tabs={tabs} />
                     <main className="flex-1 overflow-hidden relative">
