@@ -133,7 +133,7 @@
             Second: '2 смена'
         };
 
-        const DIRECTIONS = ['х/б', 'а/о', '1гр.', '2гр.', 'иб', 'вс', 'ф-в', 'иг', 'о'];
+        // DIRECTIONS removed as we now use manual input
 
         const SHIFT_PERIODS = {
             [Shift.First]: [1, 2, 3, 4, 5, 6, 7],
@@ -784,10 +784,13 @@
                             
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Направление (группа)</label>
-                                <select className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-white outline-none focus:border-indigo-500" value={tempItem.direction || ''} onChange={e => setTempItem({...tempItem, direction: e.target.value})}>
-                                    <option value="">Весь класс</option>
-                                    {DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-                                </select>
+                                <input 
+                                    type="text" 
+                                    className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-white outline-none focus:border-indigo-500" 
+                                    value={tempItem.direction || ''} 
+                                    onChange={e => setTempItem({...tempItem, direction: e.target.value})} 
+                                    placeholder="Например: 1гр. (оставьте пустым для всего класса)" 
+                                />
                             </div>
 
                             <div>
