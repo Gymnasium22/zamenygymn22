@@ -732,7 +732,7 @@
                                                                     <div 
                                                                         key={item.id} 
                                                                         onClick={(e) => { e.stopPropagation(); handleEditItem(item); }}
-                                                                        className="rounded-lg p-2 text-xs shadow-sm hover:shadow-md cursor-pointer border border-slate-100 flex flex-col gap-0.5 shrink-0" 
+                                                                        className="rounded-lg p-2 text-xs shadow-sm hover:shadow-md cursor-pointer border border-slate-100 flex flex-col gap-0.5 flex-1" 
                                                                         style={{ backgroundColor: subject?.color ? subject.color + '40' : '#f1f5f9' }}
                                                                     >
                                                                         <div className="flex justify-between items-center gap-1">
@@ -747,7 +747,7 @@
                                                                 );
                                                             })}
                                                             
-                                                            {items.length < 4 && ( // Limit to 4 sub-items visually
+                                                            {items.length < 2 && (
                                                                 <button 
                                                                     onClick={(e) => { e.stopPropagation(); handleAddItem(cls.id, p); }}
                                                                     className={`w-full rounded-lg border-2 border-dashed flex items-center justify-center text-slate-300 hover:border-indigo-300 hover:text-indigo-400 transition-colors mt-auto ${items.length === 0 ? 'h-full' : 'h-6'}`}
