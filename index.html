@@ -109,6 +109,7 @@
             Filter: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>,
             GripVertical: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></svg>,
             FileSpreadsheet: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></svg>,
+            Briefcase: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>,
         };
         
         const Icon = ({ name, size = 20, className = "", strokeWidth, fill }) => {
@@ -807,6 +808,96 @@
             );
         };
 
+        const AdministrationView = ({ data }) => {
+            const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+            const [afterPeriod, setAfterPeriod] = useState(2);
+
+            const selectedDayOfWeek = useMemo(() => {
+                const idx = new Date(selectedDate).getDay();
+                if (idx === 0) return null;
+                return DAYS[idx - 1];
+            }, [selectedDate]);
+
+            const freeTeachers = useMemo(() => {
+                if (!selectedDayOfWeek) return [];
+                
+                return data.teachers.filter(teacher => {
+                    // 1. Is absent?
+                    if (teacher.unavailableDates.includes(selectedDate)) return false;
+
+                    // 2. Has lessons AFTER the cut-off period?
+                    // We check if there are ANY lessons where period > afterPeriod
+                    const hasLateLessons = data.schedule.some(s => 
+                        s.teacherId === teacher.id && 
+                        s.day === selectedDayOfWeek && 
+                        s.period > afterPeriod
+                    );
+                    
+                    return !hasLateLessons;
+                }).sort((a, b) => a.name.localeCompare(b.name));
+            }, [data, selectedDate, selectedDayOfWeek, afterPeriod]);
+
+            return (
+                <div className="flex flex-col h-full p-6 bg-slate-50/50">
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-6 max-w-7xl mx-auto w-full">
+                        <h2 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+                             <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600"><Icon name="Briefcase" size={24}/></div>
+                             Администрация: Поиск свободных учителей
+                        </h2>
+                        
+                        <div className="flex flex-wrap gap-6 items-end">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Дата</label>
+                                <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="border border-slate-200 p-3 rounded-xl text-sm font-bold outline-none focus:border-indigo-500" />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Свободен после урока №</label>
+                                <div className="flex items-center gap-2 bg-slate-50 rounded-xl p-1 border border-slate-200">
+                                    {[1, 2, 3, 4, 5, 6, 7].map(num => (
+                                        <button 
+                                            key={num} 
+                                            onClick={() => setAfterPeriod(num)}
+                                            className={`w-10 h-10 rounded-lg text-sm font-bold transition-all ${afterPeriod === num ? 'bg-indigo-600 text-white shadow' : 'text-slate-500 hover:bg-slate-200'}`}
+                                        >
+                                            {num}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto max-w-7xl mx-auto w-full custom-scrollbar pr-2">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-10">
+                            {freeTeachers.length > 0 ? freeTeachers.map(t => (
+                                <div key={t.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition-all">
+                                    <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg shrink-0">
+                                        <Icon name="Check" size={24} strokeWidth={3}/>
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-slate-800">{t.name}</div>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {t.subjectIds.slice(0, 2).map(sid => {
+                                                const s = data.subjects.find(sub => sub.id === sid);
+                                                return s ? <span key={sid} className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">{s.name}</span> : null;
+                                            })}
+                                            {t.subjectIds.length > 2 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">...</span>}
+                                        </div>
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-400">
+                                    <Icon name="UserX" size={48} className="mb-4 text-slate-200"/>
+                                    <p className="font-medium">Нет свободных учителей по заданным критериям</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const SubstitutionView = ({ data, setData }) => {
             const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
             const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1075,7 +1166,7 @@
                              <div className="flex justify-between items-end border-b-2 border-black pb-4 mb-6">
                                  <div>
                                      <h1 className="text-4xl font-black uppercase tracking-tight mb-1">Замена Учителей</h1>
-                                     <p className="text-lg text-slate-600 font-medium">Гимназия №22</p>
+                                     <p className="text-lg text-slate-600 font-medium">Гимназия</p>
                                  </div>
                                  <div className="text-right">
                                      <div className="text-sm text-slate-500 uppercase font-bold tracking-wider">Дата</div>
@@ -1144,6 +1235,7 @@
                 { id: 'schedule', label: 'Расписание', icon: <Icon name="Calendar" size={18} /> },
                 { id: 'substitutions', label: 'Замены', icon: <Icon name="ArrowLeftRight" size={18} /> },
                 { id: 'directory', label: 'Справочники', icon: <Icon name="Library" size={18} /> },
+                { id: 'admin', label: 'Администрация', icon: <Icon name="Briefcase" size={18} /> },
                 { id: 'export', label: 'Экспорт', icon: <Icon name="Download" size={18} /> },
             ];
 
@@ -1214,6 +1306,7 @@
                         {activeTab === 'schedule' && <ScheduleView data={data} setData={setData} />}
                         {activeTab === 'substitutions' && <SubstitutionView data={data} setData={setData} />}
                         {activeTab === 'directory' && <DirectoryView data={data} setData={setData} />}
+                        {activeTab === 'admin' && <AdministrationView data={data} />}
                         {activeTab === 'export' && <ExportView data={data} />}
                     </main>
                 </div>
