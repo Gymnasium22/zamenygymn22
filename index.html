@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Гимназия: Замена Учителей</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- html2canvas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <!-- Google Fonts: Manrope -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body { 
+            font-family: 'Manrope', sans-serif; 
+            background-color: #f8fafc;
+        }
+        input, select, textarea {
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1; 
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; 
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="text-slate-800 h-screen overflow-hidden selection:bg-indigo-100 selection:text-indigo-700">
+    <div id="root" class="h-full flex flex-col"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+        
+        // --- EMBEDDED ICONS (Guaranteed to work) ---
+        // Minimalist, fashionable strokes
+        const Icons = {
+            School: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m4 6 8-4 8 4"/><path d="m18 10 4 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8l4-2"/><path d="M14 22v-4a2 2 0 0 0-4 0v4"/><path d="M18 5v17"/><path d="M6 5v17"/><circle cx="12" cy="9" r="2"/></svg>,
+            Calendar: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
+            ArrowLeftRight: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>,
+            Library: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></svg>,
+            Download: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>,
+            User: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+            Book: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>,
+            GraduationCap: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>,
+            Plus: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
+            Edit2: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+            Trash2: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+            X: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+            ChevronDown: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>,
+            UserX: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" x2="22" y1="8" y2="13"/><line x1="22" x2="17" y1="8" y2="13"/></svg>,
+            Check: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+            List: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>,
+            Coffee: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" x2="6" y1="2" y2="4"/><line x1="10" x2="10" y1="2" y2="4"/><line x1="14" x2="14" y1="2" y2="4"/></svg>,
+            UserCheck: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>,
+            Search: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+            Info: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>,
+            Star: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+            ImageDown: (props) => <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><circle cx="9" cy="9" r="2"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/></svg>,
+        };
+        
+        const Icon = ({ name, size = 20, className = "", strokeWidth, fill }) => {
+            const IconComp = Icons[name];
+            if (!IconComp) return <span className="text-red-500 font-bold">?</span>;
+            return <IconComp width={size} height={size} className={className} strokeWidth={strokeWidth} fill={fill || "none"} />;
+        };
+
+        // --- Types & Constants ---
+        const DayOfWeek = {
+            Monday: 'Пн',
+            Tuesday: 'Вт',
+            Wednesday: 'Ср',
+            Thursday: 'Чт',
+            Friday: 'Пт',
+            Saturday: 'Сб'
+        };
+
+        const Shift = {
+            First: '1 смена',
+            Second: '2 смена'
+        };
+
+        // Shift 1: Lessons 1-7
+        // Shift 2: Lessons 0-6
+        const SHIFT_PERIODS = {
+            [Shift.First]: [1, 2, 3, 4, 5, 6, 7],
+            [Shift.Second]: [0, 1, 2, 3, 4, 5, 6]
+        };
+
+        const DAYS = [
+            DayOfWeek.Monday,
+            DayOfWeek.Tuesday,
+            DayOfWeek.Wednesday,
+            DayOfWeek.Thursday,
+            DayOfWeek.Friday,
+            DayOfWeek.Saturday
+        ];
+
+        // --- Storage Service ---
+        const STORAGE_KEY = 'gymnasium_data_v3';
+        
+        const INITIAL_DATA = {
+            subjects: [
+                { id: 's1', name: 'Математика', color: '#e0e7ff' },
+                { id: 's2', name: 'Русский язык', color: '#dcfce7' },
+                { id: 's3', name: 'Литература', color: '#fef9c3' },
+                { id: 's4', name: 'Физика', color: '#f3e8ff' },
+                { id: 's5', name: 'История', color: '#ffedd5' },
+                { id: 's6', name: 'Информатика', color: '#cffafe' },
+            ],
+            teachers: [
+                { id: 't1', name: 'Иванова Анна Сергеевна', subjectIds: ['s1', 's4'], unavailableDates: [] },
+                { id: 't2', name: 'Петров Борис Михайлович', subjectIds: ['s2', 's3'], unavailableDates: [] },
+            ],
+            classes: [
+                { id: 'c1', name: '5А', shift: Shift.First },
+                { id: 'c2', name: '5Б', shift: Shift.First },
+                { id: 'c3', name: '6А', shift: Shift.Second },
+            ],
+            schedule: [],
+            substitutions: []
+        };
+
+        const generateId = () => Math.random().toString(36).substr(2, 9);
+
+        const saveData = (data) => {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+        };
+
+        const loadData = () => {
+            try {
+                const stored = localStorage.getItem(STORAGE_KEY);
+                if (stored) return JSON.parse(stored);
+            } catch (e) {}
+            return INITIAL_DATA;
+        };
+
+        // --- Components ---
+        const Modal = ({ isOpen, onClose, title, children, maxWidth = 'max-w-lg' }) => {
+            if (!isOpen) return null;
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/20 p-4 backdrop-blur-sm animate-fade-in">
+                    <div className={`bg-white rounded-2xl shadow-2xl w-full ${maxWidth} flex flex-col max-h-[90vh] ring-1 ring-black/5`}>
+                        <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+                            <h2 className="text-xl font-bold text-slate-800 tracking-tight">{title}</h2>
+                            <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-100">
+                                <Icon name="X" size={24} />
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto">
+                            {children}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const Tabs = ({ activeTab, onChange, tabs }) => {
+            return (
+                <div className="px-6 pt-2 bg-white border-b border-slate-100 flex gap-6 overflow-x-auto">
+                    {tabs.map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => onChange(tab.id)}
+                            className={`flex items-center gap-2.5 pb-4 px-1 text-sm font-bold transition-all duration-300 border-b-2 whitespace-nowrap
+                                ${activeTab === tab.id
+                                    ? 'border-indigo-600 text-indigo-600'
+                                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
+                                }`}
+                        >
+                            {tab.icon}
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
+            );
+        };
+
+        // --- Views ---
+        const DirectoryView = ({ data, setData }) => {
+            const [activeSubTab, setActiveSubTab] = useState('teachers');
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            
+            const [tempTeacher, setTempTeacher] = useState({ subjectIds: [] });
+            const [tempSubject, setTempSubject] = useState({ color: '#e0e7ff' });
+            const [tempClass, setTempClass] = useState({ shift: Shift.First });
+
+            const handleSave = () => {
+                const newData = { ...data };
+                if (activeSubTab === 'teachers') {
+                    if (tempTeacher.id) newData.teachers = data.teachers.map(t => t.id === tempTeacher.id ? { ...t, ...tempTeacher } : t);
+                    else newData.teachers = [...data.teachers, { ...tempTeacher, id: generateId(), unavailableDates: [] }];
+                } else if (activeSubTab === 'subjects') {
+                    if (tempSubject.id) newData.subjects = data.subjects.map(s => s.id === tempSubject.id ? { ...s, ...tempSubject } : s);
+                    else newData.subjects = [...data.subjects, { ...tempSubject, id: generateId() }];
+                } else {
+                    if (tempClass.id) newData.classes = data.classes.map(c => c.id === tempClass.id ? { ...c, ...tempClass } : c);
+                    else newData.classes = [...data.classes, { ...tempClass, id: generateId() }];
+                }
+                setData(newData);
+                saveData(newData);
+                setIsModalOpen(false);
+                resetForms();
+            };
+
+            const resetForms = () => {
+                setTempTeacher({ subjectIds: [] });
+                setTempSubject({ color: '#e0e7ff' });
+                setTempClass({ shift: Shift.First });
+            };
+
+            const handleDelete = (id, type) => {
+                if (!window.confirm('Вы уверены?')) return;
+                const newData = { ...data };
+                if (type === 'teachers') newData.teachers = data.teachers.filter(t => t.id !== id);
+                if (type === 'subjects') newData.subjects = data.subjects.filter(s => s.id !== id);
+                if (type === 'classes') newData.classes = data.classes.filter(c => c.id !== id);
+                setData(newData);
+                saveData(newData);
+            };
+
+            const inputClass = "w-full border border-slate-200 rounded-xl px-4 py-2.5 bg-white text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all";
+
+            const renderContent = () => {
+                if (activeSubTab === 'teachers') {
+                    return (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20">
+                            {data.teachers.map(t => (
+                                <div key={t.id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow flex flex-col group">
+                                    <div className="flex justify-between items-start mb-3">
+                                        <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                                            <Icon name="User" size={20} />
+                                        </div>
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button onClick={() => { setTempTeacher(t); setIsModalOpen(true); }} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full"><Icon name="Edit2" size={16}/></button>
+                                            <button onClick={() => handleDelete(t.id, 'teachers')} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full"><Icon name="Trash2" size={16}/></button>
+                                        </div>
+                                    </div>
+                                    <h3 className="font-bold text-slate-800 mb-1">{t.name}</h3>
+                                    <div className="flex flex-wrap gap-1 mt-auto">
+                                        {t.subjectIds.map(sid => {
+                                            const subj = data.subjects.find(s => s.id === sid);
+                                            return subj ? <span key={sid} className="px-2 py-1 rounded-md text-xs font-medium" style={{backgroundColor: subj.color, color: '#334155'}}>{subj.name}</span> : null;
+                                        })}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                }
+                if (activeSubTab === 'subjects') {
+                    return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 pb-20">
+                            {data.subjects.map(s => (
+                                <div key={s.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group hover:border-slate-200">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full shadow-inner" style={{ backgroundColor: s.color }}></div>
+                                        <span className="font-semibold text-slate-700">{s.name}</span>
+                                    </div>
+                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => { setTempSubject(s); setIsModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-full"><Icon name="Edit2" size={16}/></button>
+                                        <button onClick={() => handleDelete(s.id, 'subjects')} className="p-1.5 text-slate-400 hover:text-red-600 rounded-full"><Icon name="Trash2" size={16}/></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                }
+                if (activeSubTab === 'classes') {
+                    return (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 pb-20">
+                            {data.classes.map(c => (
+                                <div key={c.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center relative group hover:shadow-md transition-all">
+                                    <div className="text-2xl font-bold text-slate-800 mb-1">{c.name}</div>
+                                    <div className={`text-xs font-bold px-2 py-0.5 rounded-full inline-block ${c.shift === Shift.First ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
+                                        {c.shift === Shift.First ? 'I' : 'II'} смена
+                                    </div>
+                                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => { setTempClass(c); setIsModalOpen(true); }} className="p-1 text-slate-400 hover:text-indigo-600"><Icon name="Edit2" size={14}/></button>
+                                        <button onClick={() => handleDelete(c.id, 'classes')} className="p-1 text-slate-400 hover:text-red-600"><Icon name="Trash2" size={14}/></button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                }
+            };
+
+            return (
+                <div className="flex flex-col h-full bg-slate-50/50">
+                    <div className="px-6 py-6 max-w-7xl mx-auto w-full flex-1 flex flex-col">
+                        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+                            <div className="flex p-1 bg-white rounded-xl shadow-sm border border-slate-100">
+                                <button onClick={() => setActiveSubTab('teachers')} className={`px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeSubTab === 'teachers' ? 'bg-indigo-50 text-indigo-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}><Icon name="User" size={18}/> Учителя</button>
+                                <button onClick={() => setActiveSubTab('subjects')} className={`px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeSubTab === 'subjects' ? 'bg-indigo-50 text-indigo-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}><Icon name="Book" size={18}/> Предметы</button>
+                                <button onClick={() => setActiveSubTab('classes')} className={`px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${activeSubTab === 'classes' ? 'bg-indigo-50 text-indigo-600 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}><Icon name="GraduationCap" size={18}/> Классы</button>
+                            </div>
+                            <button onClick={() => { resetForms(); setIsModalOpen(true); }} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-slate-800 transition shadow-lg shadow-slate-200 font-semibold">
+                                <Icon name="Plus" size={20} strokeWidth={2.5} /> Добавить
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">{renderContent()}</div>
+                    </div>
+
+                    <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={activeSubTab === 'teachers' ? 'Добавить учителя' : activeSubTab === 'subjects' ? 'Добавить предмет' : 'Добавить класс'}>
+                        <div className="space-y-5">
+                            {activeSubTab === 'teachers' && (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">ФИО Учителя</label>
+                                        <input type="text" className={inputClass} value={tempTeacher.name || ''} onChange={e => setTempTeacher({...tempTeacher, name: e.target.value})} placeholder="ФИО" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Предметы</label>
+                                        <div className="max-h-48 overflow-y-auto border border-slate-200 rounded-xl p-2 grid grid-cols-1 gap-1 bg-white custom-scrollbar">
+                                            {data.subjects.map(s => (
+                                                <label key={s.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                                                    <input type="checkbox" className="w-5 h-5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={tempTeacher.subjectIds?.includes(s.id)} onChange={e => {
+                                                        const current = tempTeacher.subjectIds || [];
+                                                        setTempTeacher({...tempTeacher, subjectIds: e.target.checked ? [...current, s.id] : current.filter(id => id !== s.id)});
+                                                    }} />
+                                                    <span className="text-sm font-medium text-slate-700">{s.name}</span>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            {activeSubTab === 'subjects' && (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Название</label>
+                                        <input type="text" className={inputClass} value={tempSubject.name || ''} onChange={e => setTempSubject({...tempSubject, name: e.target.value})} placeholder="Математика" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Цвет</label>
+                                        <input type="color" className="h-12 w-24 p-1 border border-slate-200 rounded-xl cursor-pointer bg-white" value={tempSubject.color || '#ffffff'} onChange={e => setTempSubject({...tempSubject, color: e.target.value})} />
+                                    </div>
+                                </>
+                            )}
+                            {activeSubTab === 'classes' && (
+                                <>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Название</label>
+                                        <input type="text" className={inputClass} value={tempClass.name || ''} onChange={e => setTempClass({...tempClass, name: e.target.value})} placeholder="5А" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-wide">Смена</label>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button onClick={() => setTempClass({...tempClass, shift: Shift.First})} className={`p-3 rounded-xl border text-sm font-bold transition-all ${tempClass.shift === Shift.First ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>1 смена</button>
+                                            <button onClick={() => setTempClass({...tempClass, shift: Shift.Second})} className={`p-3 rounded-xl border text-sm font-bold transition-all ${tempClass.shift === Shift.Second ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}`}>2 смена</button>
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        <div className="flex justify-end gap-3 mt-8 pt-5 border-t border-slate-100">
+                            <button onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-slate-500 hover:bg-slate-100 rounded-xl text-sm font-bold transition-colors">Отмена</button>
+                            <button onClick={handleSave} className="px-6 py-2.5 bg-slate-900 text-white rounded-xl hover:bg-slate-800 text-sm font-bold transition-all shadow-lg shadow-slate-200">Сохранить</button>
+                        </div>
+                    </Modal>
+                </div>
+            );
+        };
+
+        const ScheduleView = ({ data, setData }) => {
+            const [selectedShift, setSelectedShift] = useState(Shift.First);
+            const [selectedDay, setSelectedDay] = useState(DayOfWeek.Monday);
+            const [isEditorOpen, setIsEditorOpen] = useState(false);
+            const [editingCell, setEditingCell] = useState(null);
+            const [tempItem, setTempItem] = useState({});
+
+            const currentPeriods = SHIFT_PERIODS[selectedShift];
+            const visibleClasses = data.classes.filter(c => (c.shift || Shift.First) === selectedShift);
+
+            const getScheduleItem = (classId, period) => {
+                return data.schedule.find(s => s.classId === classId && s.period === period && s.day === selectedDay && s.shift === selectedShift);
+            };
+
+            const handleCellClick = (classId, period) => {
+                const existing = getScheduleItem(classId, period);
+                setEditingCell({ classId, period });
+                setTempItem(existing ? { ...existing } : { classId, period, day: selectedDay, shift: selectedShift });
+                setIsEditorOpen(true);
+            };
+
+            const handleSaveItem = () => {
+                if (!tempItem.subjectId || !tempItem.teacherId) { alert("Заполните данные"); return; }
+                const newData = { ...data };
+                newData.schedule = newData.schedule.filter(s => !(s.classId === editingCell.classId && s.period === editingCell.period && s.day === selectedDay && s.shift === selectedShift));
+                newData.schedule.push({ ...tempItem, id: tempItem.id || generateId(), day: selectedDay, shift: selectedShift, classId: editingCell.classId, period: editingCell.period });
+                setData(newData);
+                saveData(newData);
+                setIsEditorOpen(false);
+            };
+
+            const handleDeleteItem = () => {
+                if (!tempItem.id) return;
+                const newData = { ...data };
+                newData.schedule = newData.schedule.filter(s => s.id !== tempItem.id);
+                setData(newData);
+                saveData(newData);
+                setIsEditorOpen(false);
+            };
+
+            return (
+                <div className="flex flex-col h-full bg-slate-50/50 p-6">
+                    <div className="flex flex-wrap gap-4 items-center justify-between bg-white p-2 rounded-2xl shadow-sm border border-slate-100 mb-6 max-w-7xl mx-auto w-full">
+                        <div className="flex gap-4 items-center">
+                            <div className="bg-slate-100 p-1 rounded-xl flex">
+                                <button onClick={() => setSelectedShift(Shift.First)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${selectedShift === Shift.First ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>1 смена</button>
+                                <button onClick={() => setSelectedShift(Shift.Second)} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${selectedShift === Shift.Second ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>2 смена</button>
+                            </div>
+                            <div className="h-8 w-px bg-slate-200 mx-2"></div>
+                            <div className="flex overflow-x-auto pb-1 gap-1 custom-scrollbar">
+                                {DAYS.map(day => (
+                                    <button key={day} onClick={() => setSelectedDay(day)} className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedDay === day ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' : 'text-slate-500 hover:bg-slate-100'}`}>{day}</button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 bg-white rounded-3xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden flex flex-col max-w-7xl mx-auto w-full">
+                        <div className="overflow-auto flex-1 custom-scrollbar">
+                            <table className="w-full border-collapse min-w-[1000px]">
+                                <thead className="bg-slate-50 sticky top-0 z-20">
+                                    <tr>
+                                        <th className="p-4 border-b border-r border-slate-100 text-left text-xs font-extrabold text-slate-400 uppercase w-24 sticky left-0 bg-slate-50 z-30">Класс</th>
+                                        {currentPeriods.map(p => <th key={p} className="p-4 border-b border-slate-100 text-center text-xs font-extrabold text-slate-400 uppercase min-w-[140px]">{p} урок</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {visibleClasses.map(cls => (
+                                        <tr key={cls.id} className="group">
+                                            <td className="p-4 border-r border-slate-100 font-black text-xl text-slate-700 sticky left-0 bg-white z-10 text-center group-hover:bg-slate-50 transition-colors">{cls.name}</td>
+                                            {currentPeriods.map(p => {
+                                                const item = getScheduleItem(cls.id, p);
+                                                const subject = data.subjects.find(s => s.id === item?.subjectId);
+                                                const teacher = data.teachers.find(t => t.id === item?.teacherId);
+                                                return (
+                                                    <td key={p} onClick={() => handleCellClick(cls.id, p)} className="p-2 border-r border-slate-50 h-24 align-top cursor-pointer transition-all relative hover:bg-slate-50">
+                                                        {item ? (
+                                                            <div className="h-full w-full rounded-xl p-3 text-xs shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between border border-slate-100" style={{ backgroundColor: subject?.color ? subject.color + '40' : '#f1f5f9' }}>
+                                                                <div className="font-bold text-slate-800 line-clamp-1 text-sm">{subject?.name}</div>
+                                                                <div className="text-slate-600 line-clamp-1 flex items-center gap-1"><Icon name="User" size={10}/> {teacher?.name}</div>
+                                                                {item.roomId && <div className="text-[10px] font-mono text-slate-400 text-right bg-white/50 rounded px-1 self-end">#{item.roomId}</div>}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="h-full w-full rounded-xl border-2 border-dashed border-slate-100 flex items-center justify-center text-slate-200 hover:border-indigo-200 hover:text-indigo-300 transition-colors"><Icon name="Plus" size={24} /></div>
+                                                        )}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <Modal isOpen={isEditorOpen} onClose={() => setIsEditorOpen(false)} title="Урок">
+                        <div className="space-y-5">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Предмет</label>
+                                <select className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-white outline-none focus:border-indigo-500" value={tempItem.subjectId || ''} onChange={e => setTempItem({...tempItem, subjectId: e.target.value, teacherId: ''})}>
+                                    <option value="">Выберите...</option>
+                                    {data.subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Учитель</label>
+                                <select className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-white outline-none focus:border-indigo-500" value={tempItem.teacherId || ''} onChange={e => setTempItem({...tempItem, teacherId: e.target.value})} disabled={!tempItem.subjectId}>
+                                    <option value="">Выберите...</option>
+                                    {data.teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                </select>
+                            </div>
+                             <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5">Кабинет</label>
+                                <input type="text" className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-white outline-none focus:border-indigo-500" value={tempItem.roomId || ''} onChange={e => setTempItem({...tempItem, roomId: e.target.value})} />
+                            </div>
+                            <div className="flex justify-between pt-6 mt-2 border-t border-slate-100">
+                                {tempItem.id && <button onClick={handleDeleteItem} className="text-red-500 hover:bg-red-50 px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors"><Icon name="Trash2" size={18}/> Удалить</button>}
+                                <button onClick={handleSaveItem} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 text-sm font-bold transition-colors ml-auto">Сохранить</button>
+                            </div>
+                        </div>
+                    </Modal>
+                </div>
+            );
+        };
+
+        const SubstitutionView = ({ data, setData }) => {
+            const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [currentSubParams, setCurrentSubParams] = useState(null);
+
+            const selectedDayOfWeek = useMemo(() => {
+                const dayIndex = new Date(selectedDate).getDay();
+                if (dayIndex === 0) return null;
+                return DAYS[dayIndex - 1];
+            }, [selectedDate]);
+
+            const absentTeachers = data.teachers.filter(t => t.unavailableDates.includes(selectedDate));
+            const absentIds = absentTeachers.map(t => t.id);
+            const affectedLessons = data.schedule.filter(s => s.day === selectedDayOfWeek && absentIds.includes(s.teacherId)).sort((a, b) => a.period - b.period);
+
+            const handleToggleUnavailable = (teacherId) => {
+                const newData = { ...data };
+                const teacher = newData.teachers.find(t => t.id === teacherId);
+                if (teacher.unavailableDates.includes(selectedDate)) {
+                    teacher.unavailableDates = teacher.unavailableDates.filter(d => d !== selectedDate);
+                } else {
+                    teacher.unavailableDates.push(selectedDate);
+                }
+                setData(newData);
+                saveData(newData);
+            };
+
+            const handleAssignReplacement = (teacherId) => {
+                const newData = { ...data };
+                const existingSubIndex = newData.substitutions.findIndex(s => s.scheduleItemId === currentSubParams.scheduleItemId && s.date === selectedDate);
+                const newSub = {
+                    id: existingSubIndex >= 0 ? newData.substitutions[existingSubIndex].id : generateId(),
+                    date: selectedDate,
+                    scheduleItemId: currentSubParams.scheduleItemId,
+                    originalTeacherId: currentSubParams.originalTeacherId,
+                    replacementTeacherId: teacherId
+                };
+                if (existingSubIndex >= 0) newData.substitutions[existingSubIndex] = newSub;
+                else newData.substitutions.push(newSub);
+                setData(newData);
+                saveData(newData);
+                setIsModalOpen(false);
+            };
+
+            const handleDeleteSubstitution = (substitutionId) => {
+                if (!confirm('Отменить замену?')) return;
+                const newData = { ...data };
+                newData.substitutions = newData.substitutions.filter(s => s.id !== substitutionId);
+                setData(newData);
+                saveData(newData);
+            };
+
+            const getCandidates = () => {
+                if (!currentSubParams || !selectedDayOfWeek) return [];
+                return data.teachers.map(teacher => {
+                    const isAbsent = teacher.unavailableDates.includes(selectedDate);
+                    const isBusy = data.schedule.some(s => s.teacherId === teacher.id && s.day === selectedDayOfWeek && s.period === currentSubParams.period && s.shift === currentSubParams.shift);
+                    const isSpecialist = teacher.subjectIds.includes(currentSubParams.subjectId);
+                    return { teacher, isAbsent, isBusy, isSpecialist, score: (isAbsent || isBusy ? -100 : 0) + (isSpecialist ? 10 : 0) };
+                }).sort((a, b) => b.score - a.score);
+            };
+
+            return (
+                <div className="flex flex-col h-full bg-slate-50/50 p-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl mx-auto w-full h-full">
+                        <div className="bg-white p-6 rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 space-y-8 h-fit sticky top-6">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Дата</label>
+                                <div className="relative">
+                                    <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-full border border-slate-200 rounded-xl p-3 pl-10 bg-white font-medium" />
+                                    <div className="absolute left-3 top-3.5 text-slate-400 pointer-events-none"><Icon name="Calendar" size={18}/></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div className="flex items-center justify-between mb-4">
+                                    <h3 className="font-bold text-slate-800 flex items-center gap-2"><Icon name="UserX" size={20} className="text-rose-500"/> Отсутствующие</h3>
+                                    <span className="bg-rose-100 text-rose-600 text-xs font-bold px-2 py-1 rounded-full">{absentTeachers.length}</span>
+                                </div>
+                                <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                    {data.teachers.map(t => {
+                                        const isAbsent = t.unavailableDates.includes(selectedDate);
+                                        return (
+                                            <button key={t.id} onClick={() => handleToggleUnavailable(t.id)} className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${isAbsent ? 'bg-rose-50 border-rose-200 shadow-inner' : 'bg-white border-slate-100 hover:border-indigo-300'}`}>
+                                                <span className={`text-sm font-medium ${isAbsent ? 'text-rose-700' : 'text-slate-600'}`}>{t.name}</span>
+                                                <div className={`w-5 h-5 rounded-full flex items-center justify-center border ${isAbsent ? 'bg-rose-500 border-rose-500 text-white' : 'border-slate-300'}`}>{isAbsent && <Icon name="Check" size={12}/>}</div>
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="lg:col-span-2 bg-white rounded-3xl shadow-lg shadow-slate-200/50 border border-slate-100 flex flex-col overflow-hidden h-full max-h-[calc(100vh-100px)]">
+                            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white z-10">
+                                <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Icon name="List" size={20} className="text-indigo-500"/> Уроки требующие замены</h2>
+                            </div>
+                            <div className="overflow-y-auto p-6 flex-1 bg-slate-50 space-y-4 custom-scrollbar">
+                                {affectedLessons.map(lesson => {
+                                    const sub = data.substitutions.find(s => s.scheduleItemId === lesson.id && s.date === selectedDate);
+                                    const replacement = sub ? data.teachers.find(t => t.id === sub.replacementTeacherId) : null;
+                                    const subject = data.subjects.find(s => s.id === lesson.subjectId);
+                                    const cls = data.classes.find(c => c.id === lesson.classId);
+                                    const teacher = data.teachers.find(t => t.id === lesson.teacherId);
+                                    return (
+                                        <div key={lesson.id} className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                            <div className="flex items-start gap-4">
+                                                <div className="flex flex-col items-center justify-center w-14 h-14 bg-slate-100 rounded-xl text-slate-500 font-bold">
+                                                    <span className="text-xl leading-none">{lesson.period}</span>
+                                                    <span className="text-[10px] uppercase">урок</span>
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="font-black text-lg text-slate-800">{cls?.name}</span>
+                                                        <span className="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase bg-blue-50 text-blue-600">{lesson.shift === Shift.First ? '1 смена' : '2 смена'}</span>
+                                                    </div>
+                                                    <div className="font-medium text-slate-600">{subject?.name}</div>
+                                                    <div className="text-xs text-rose-400 flex items-center gap-1 mt-1"><Icon name="UserX" size={12}/> {teacher?.name}</div>
+                                                </div>
+                                            </div>
+                                            <div className="w-full sm:w-auto">
+                                                {replacement ? (
+                                                    <div className="flex items-center justify-between gap-3 bg-emerald-50/50 p-2 rounded-xl border border-emerald-100/50">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center"><Icon name="UserCheck" size={20}/></div>
+                                                            <div>
+                                                                <div className="text-[10px] font-bold text-emerald-600 uppercase">Заменяет</div>
+                                                                <div className="font-bold text-emerald-900 text-sm">{replacement.name}</div>
+                                                            </div>
+                                                        </div>
+                                                        <button onClick={() => handleDeleteSubstitution(sub.id)} className="w-8 h-8 flex items-center justify-center text-rose-400 hover:text-white hover:bg-rose-500 rounded-lg transition-all"><Icon name="Trash2" size={16}/></button>
+                                                    </div>
+                                                ) : (
+                                                    <button onClick={() => { setCurrentSubParams({ scheduleItemId: lesson.id, subjectId: lesson.subjectId, period: lesson.period, shift: lesson.shift, originalTeacherId: teacher.id }); setIsModalOpen(true); }} className="w-full sm:w-auto bg-indigo-600 text-white px-5 py-3 rounded-xl text-sm font-bold hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"><Icon name="Search" size={18}/> Найти замену</button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                    <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Выбор учителя" maxWidth="max-w-2xl">
+                        <div className="space-y-3">
+                            {getCandidates().map(({ teacher, isAbsent, isBusy, isSpecialist }) => {
+                                const canTeach = !isAbsent && !isBusy;
+                                return (
+                                    <button key={teacher.id} disabled={!canTeach} onClick={() => handleAssignReplacement(teacher.id)} className={`w-full text-left p-4 rounded-xl border transition-all group flex items-center justify-between ${!canTeach ? 'opacity-60 bg-slate-50 border-slate-100 cursor-not-allowed' : 'bg-white border-slate-200 hover:border-indigo-500 hover:shadow-md'}`}>
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white shadow-sm ${isAbsent || isBusy ? 'bg-rose-400' : isSpecialist ? 'bg-emerald-500' : 'bg-amber-400'}`}>
+                                                {isSpecialist && canTeach ? <Icon name="Star" size={18} /> : <Icon name="User" size={18} />}
+                                            </div>
+                                            <div>
+                                                <div className={`font-bold text-base ${canTeach ? 'text-slate-800' : 'text-slate-500'}`}>{teacher.name}</div>
+                                                <div className="text-xs text-slate-500 flex items-center gap-1">
+                                                    {isSpecialist && <span className="text-emerald-600 font-bold">Ведет предмет</span>}
+                                                    {isAbsent ? <span className="text-rose-500">Отсутствует</span> : isBusy ? <span className="text-rose-500">Занят</span> : <span className="text-emerald-600">Свободен</span>}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {canTeach && <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="Plus" size={20}/></div>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </Modal>
+                </div>
+            );
+        };
+
+        const ExportView = ({ data }) => {
+            const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+            const printRef = useRef(null);
+            const subList = data.substitutions.filter(s => s.date === date);
+            const handleDownload = async () => {
+                if (!printRef.current) return;
+                const canvas = await html2canvas(printRef.current, { scale: 3, backgroundColor: '#ffffff' });
+                const link = document.createElement('a');
+                link.download = `Замены_${date}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            };
+
+            return (
+                <div className="flex flex-col h-full p-6 bg-slate-50/50">
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-wrap gap-4 justify-between items-center max-w-5xl mx-auto w-full mb-8">
+                         <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center"><Icon name="ImageDown" size={20}/></div>
+                            <div>
+                                <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">Дата экспорта</div>
+                                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="font-bold text-slate-800 bg-transparent outline-none cursor-pointer" />
+                            </div>
+                        </div>
+                        <button onClick={handleDownload} disabled={subList.length === 0} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-slate-800 transition-colors shadow-lg shadow-slate-300 disabled:opacity-50 disabled:cursor-not-allowed"><Icon name="Download" size={20}/> Скачать</button>
+                    </div>
+                    <div className="flex-1 overflow-auto flex justify-center p-4 custom-scrollbar">
+                        <div className="w-full max-w-[800px]">
+                             <div ref={printRef} className="bg-white p-12 shadow-2xl min-h-[800px] text-slate-900 relative overflow-hidden" style={{ fontFamily: '"Times New Roman", serif' }}>
+                                <div className="text-center mb-10">
+                                    <h1 className="text-3xl font-bold uppercase mb-2 tracking-widest">Замена уроков</h1>
+                                    <div className="w-20 h-1 bg-black mx-auto mb-4"></div>
+                                    <h2 className="text-xl italic text-slate-600">{new Date(date).toLocaleDateString('ru-RU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</h2>
+                                </div>
+                                {subList.length === 0 ? <div className="text-center p-20 border-2 border-dashed border-slate-300 text-slate-400 italic rounded-lg">Нет изменений</div> : (
+                                    <table className="w-full border-collapse border border-black text-left text-base">
+                                        <thead>
+                                            <tr className="bg-slate-100">
+                                                <th className="border border-black p-3 text-center w-16">Урок</th>
+                                                <th className="border border-black p-3 w-24">Класс</th>
+                                                <th className="border border-black p-3">Предмет</th>
+                                                <th className="border border-black p-3 w-1/4 text-rose-700">Отсутствует</th>
+                                                <th className="border border-black p-3 w-1/4 text-emerald-800 bg-emerald-50">Заменяет</th>
+                                                <th className="border border-black p-3 text-center w-16">Каб.</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {subList.map((sub, i) => {
+                                                const sch = data.schedule.find(s => s.id === sub.scheduleItemId);
+                                                if(!sch) return null;
+                                                const cls = data.classes.find(c=>c.id===sch.classId);
+                                                return (
+                                                    <tr key={i}>
+                                                        <td className="border border-black p-3 text-center font-bold">{sch.period}</td>
+                                                        <td className="border border-black p-3 font-bold">{cls?.name}</td>
+                                                        <td className="border border-black p-3">{data.subjects.find(s=>s.id===sch.subjectId)?.name}</td>
+                                                        <td className="border border-black p-3 italic text-rose-800">{data.teachers.find(t=>t.id===sub.originalTeacherId)?.name}</td>
+                                                        <td className="border border-black p-3 font-bold text-emerald-900 bg-emerald-50/30">{data.teachers.find(t=>t.id===sub.replacementTeacherId)?.name}</td>
+                                                        <td className="border border-black p-3 text-center">{sch.roomId || '-'}</td>
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                    </table>
+                                )}
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('schedule');
+            const [data, setData] = useState(loadData());
+            const tabs = [
+                { id: 'schedule', label: 'Расписание', icon: <Icon name="Calendar" size={20} /> },
+                { id: 'substitutions', label: 'Замены', icon: <Icon name="ArrowLeftRight" size={20} /> },
+                { id: 'directory', label: 'Справочники', icon: <Icon name="Library" size={20} /> },
+                { id: 'export', label: 'Экспорт', icon: <Icon name="Download" size={20} /> },
+            ];
+            return (
+                <div className="flex flex-col h-screen bg-slate-50 text-slate-800 font-sans">
+                    <header className="bg-white border-b border-slate-100 px-6 py-4 flex items-center gap-4 shadow-sm z-20">
+                        <div className="bg-indigo-600 w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200"><Icon name="School" size={24} strokeWidth={2} /></div>
+                        <div><h1 className="text-xl font-extrabold text-slate-900 tracking-tight">Гимназия</h1><p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Система управления</p></div>
+                    </header>
+                    <Tabs activeTab={activeTab} onChange={setActiveTab} tabs={tabs} />
+                    <main className="flex-1 overflow-hidden relative">
+                        {activeTab === 'schedule' && <ScheduleView data={data} setData={setData} />}
+                        {activeTab === 'substitutions' && <SubstitutionView data={data} setData={setData} />}
+                        {activeTab === 'directory' && <DirectoryView data={data} setData={setData} />}
+                        {activeTab === 'export' && <ExportView data={data} />}
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
